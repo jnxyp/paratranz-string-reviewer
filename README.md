@@ -2,50 +2,54 @@
 
 一个用于审阅 Paratranz 项目翻译词条的小工具。
 
-项目目标是：
+项目目标：
 
 - 从 Paratranz 拉取项目最新导出包
 - 拉取术语表
 - 将词条分批交给 LLM 审阅
 - 输出结构化问题文件，供后续处理
 
-## 当前状态
+当前实现是一个本地 CLI，主流程会：
 
-第一版 CLI 已经实现，包含：
+- 触发 artifact 导出并下载最新项目文件
+- 拉取术语表
+- 过滤可审核词条
+- 分批调用 OpenAI 审核
+- 输出结果到 `data/results/*.json`
 
-- `reviewer terms --project <id>`：拉取并保存术语表
-- `reviewer export --project <id>`：触发导出、下载并解压项目文件
-- `reviewer run --project <id>`：执行完整主链
+## 使用
 
-当前实现使用：
+先在 [`.env.example`](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/.env.example) 的基础上准备 [`.env`](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/.env)，至少包含：
 
-- Node.js + TypeScript + pnpm
-- Paratranz API 拉取 artifact 和术语表
-- OpenAI Responses API 执行批量审核
-- `src/config/config.ts` 维护模型、规则、提示词和审核参数
-- 本地 `data/` 目录保存 artifact、解压结果、术语、缓存和结果文件
+```env
+PARATRANZ_API_KEY=...
+OPENAI_API_KEY=...
+```
 
-已验证：
-
-- 项目 `3489` 术语表拉取成功
-- 项目 `3489` artifact 下载和解压成功
-- 本地可解析出导出词条
-
-## 常用命令
+安装依赖：
 
 ```bash
 pnpm install
-pnpm check
-pnpm build
-pnpm exec tsx src/cli.ts --help
+```
+
+常用命令：
+
+```bash
 pnpm exec tsx src/cli.ts terms --project 3489
 pnpm exec tsx src/cli.ts export --project 3489
 pnpm exec tsx src/cli.ts run --project 3489
 ```
 
+先做小批量测试时可以用：
+
+```bash
+pnpm exec tsx src/cli.ts run --project 3489 --batch-size 10 --max-strings 50 --force
+```
+
+运行结果会写到 `data/results/`。审核参数、规则和提示词在 [src/config/config.ts](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/src/config/config.ts)。
+
 ## 文档
 
-- 运行时配置：[src/config/config.ts](src/config/config.ts)
-- 审核规则、提示词与 I/O 规范：[docs/review-rules-and-prompts.md](docs/review-rules-and-prompts.md)
-- Paratranz OpenAPI 文档副本：[docs/paratranz-api.yml](docs/paratranz-api.yml)
-- 本地实现计划：[AGENTS.md](AGENTS.md)
+- 运行时配置：[src/config/config.ts](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/src/config/config.ts)
+- 审核规则、提示词与 I/O 规范：[docs/review-rules-and-prompts.md](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/docs/review-rules-and-prompts.md)
+- Paratranz OpenAPI 文档副本：[docs/paratranz-api.yml](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/docs/paratranz-api.yml)

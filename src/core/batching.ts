@@ -19,8 +19,6 @@ export interface ReviewBatch {
 
 export function buildReviewCandidates(input: {
   strings: ParsedString[];
-  cache: CacheFile;
-  force?: boolean;
 }): ReviewCandidate[] {
   return input.strings
     .filter((item) => shouldReview(item))
@@ -28,18 +26,39 @@ export function buildReviewCandidates(input: {
       ...item,
       hash: buildStringHash(item),
     }))
-    .filter((item) => {
-      if (input.force) {
-        return true;
-      }
-
-      if (input.cache.rulesVersion !== undefined && input.cache.rulesVersion !== "v1") {
-        return true;
-      }
-
-      return !(item.hash in input.cache.items);
-    })
     .sort((a, b) => a.key.localeCompare(b.key, "en"));
+}
+
+export function splitCandidatesByCache(input: {
+  candidates: ReviewCandidate[];
+  cache: CacheFile;
+  force?: boolean;
+}): {
+  cachedCandidates: ReviewCandidate[];
+  pendingCandidates: ReviewCandidate[];
+} {
+  if (input.force) {
+    return {
+      cachedCandidates: [],
+      pendingCandidates: input.candidates,
+    };
+  }
+
+  const cachedCandidates: ReviewCandidate[] = [];
+  const pendingCandidates: ReviewCandidate[] = [];
+
+  for (const candidate of input.candidates) {
+    if (candidate.hash in input.cache.items) {
+      cachedCandidates.push(candidate);
+      continue;
+    }
+    pendingCandidates.push(candidate);
+  }
+
+  return {
+    cachedCandidates,
+    pendingCandidates,
+  };
 }
 
 export function buildBatches(candidates: ReviewCandidate[], batchSize: number): ReviewBatch[] {

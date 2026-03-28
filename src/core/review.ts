@@ -8,6 +8,7 @@ export interface ReviewedIssue {
   key: string;
   original: string;
   translation: string;
+  fromCache: boolean;
   hits: Array<{
     rid: RuleId;
     reason?: string;
@@ -84,6 +85,7 @@ async function processBatch(input: {
       key: item.key,
       original: item.original,
       translation: item.translation,
+      fromCache: false,
       hits: issue.hits,
     });
   }

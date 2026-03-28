@@ -21,6 +21,7 @@ export interface ProjectIssueResult {
   stringUrl: string;
   original: string;
   translation: string;
+  fromCache: boolean;
   category: Category;
   hits: ResultHit[];
 }
@@ -31,9 +32,13 @@ export interface ProjectResult {
   model: string;
   rulesVersion: string;
   stats: {
+    totalStringCount: number;
+    cachedStringCount: number;
     reviewedStringCount: number;
     issueStringCount: number;
     issueCount: number;
+    cachedIssueCount: number;
+    newIssueCount: number;
   };
   usage: {
     inputTokens: number;
@@ -47,6 +52,8 @@ export interface ProjectResult {
 export function buildProjectResult(input: {
   projectId: number;
   model: string;
+  totalStringCount: number;
+  cachedStringCount: number;
   reviewedStringCount: number;
   usage: {
     inputTokens: number;
@@ -61,9 +68,17 @@ export function buildProjectResult(input: {
     model: input.model,
     rulesVersion: RULES_VERSION,
     stats: {
+      totalStringCount: input.totalStringCount,
+      cachedStringCount: input.cachedStringCount,
       reviewedStringCount: input.reviewedStringCount,
       issueStringCount: input.issues.length,
       issueCount: input.issues.reduce((sum, issue) => sum + issue.hits.length, 0),
+      cachedIssueCount: input.issues
+        .filter((issue) => issue.fromCache)
+        .reduce((sum, issue) => sum + issue.hits.length, 0),
+      newIssueCount: input.issues
+        .filter((issue) => !issue.fromCache)
+        .reduce((sum, issue) => sum + issue.hits.length, 0),
     },
     usage: input.usage,
     rules: [...REVIEW_RULES],
@@ -75,6 +90,7 @@ export function buildProjectResult(input: {
         stringUrl: buildStringUrl(input.projectId, issue.key),
         original: issue.original,
         translation: issue.translation,
+        fromCache: issue.fromCache,
         category: firstRule.category,
         hits: issue.hits.map((hit) => ({
           rid: hit.rid,

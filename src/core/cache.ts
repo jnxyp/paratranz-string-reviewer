@@ -1,13 +1,28 @@
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { RULES_VERSION } from "../config/rules.js";
+import type { RuleId } from "../config/rules.js";
 import { sha256 } from "../utils/hash.js";
 import { readJsonFile, writeJsonFile } from "../utils/json.js";
+
+const cacheHitSchema = z.object({
+  rid: z.string() as z.ZodType<RuleId>,
+  reason: z.string().optional(),
+});
+
+const cachedIssueSchema = z.object({
+  filePath: z.string(),
+  key: z.string(),
+  original: z.string(),
+  translation: z.string(),
+  hits: z.array(cacheHitSchema),
+});
 
 const cacheEntrySchema = z.object({
   key: z.string(),
   reviewedAt: z.string(),
-  status: z.enum(["clean", "has_issue"]),
+  issue: cachedIssueSchema.nullable(),
 });
 
 const cacheFileSchema = z.object({
@@ -23,12 +38,15 @@ export function getCachePath(dataDir: string, projectId: number): string {
 
 export function loadCache(path: string): CacheFile {
   try {
-    return cacheFileSchema.parse(readJsonFile(path));
+    const cache = cacheFileSchema.parse(readJsonFile(path));
+    if (cache.rulesVersion !== RULES_VERSION) {
+      rmSync(path, { force: true });
+      return createEmptyCache();
+    }
+    return cache;
   } catch {
-    return {
-      rulesVersion: RULES_VERSION,
-      items: {},
-    };
+    rmSync(path, { force: true });
+    return createEmptyCache();
   }
 }
 
@@ -42,4 +60,11 @@ export function buildStringHash(input: {
   translation: string;
 }): string {
   return sha256(`${input.key}\n${input.original}\n${input.translation}`);
+}
+
+function createEmptyCache(): CacheFile {
+  return {
+    rulesVersion: RULES_VERSION,
+    items: {},
+  };
 }

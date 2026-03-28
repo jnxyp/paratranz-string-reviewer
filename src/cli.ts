@@ -10,12 +10,17 @@ import {
   buildBatches,
   buildReviewCandidates,
   limitCandidates,
+  splitCandidatesByCache,
 } from "./core/batching.js";
-import { getCachePath, loadCache, saveCache } from "./core/cache.js";
+import { getCachePath, loadCache, saveCache, type CacheFile } from "./core/cache.js";
 import { downloadAndExtractArtifact } from "./core/export.js";
 import { parseExtractedStrings } from "./core/parse.js";
 import { buildProjectResult, saveProjectResult } from "./core/result.js";
-import { reviewBatches } from "./core/review.js";
+import {
+  reviewBatches,
+  type ReviewedIssue,
+  type ReviewRunResult,
+} from "./core/review.js";
 import { fetchAndSaveTerms } from "./core/terms.js";
 import { ensureDir } from "./utils/fs.js";
 
@@ -82,34 +87,61 @@ program
     const cache = loadCache(cachePath);
     const candidates = buildReviewCandidates({
       strings: parsedStrings,
+    });
+    const limitedCandidates = limitCandidates(candidates, maxStrings);
+    const { cachedCandidates, pendingCandidates } = splitCandidatesByCache({
+      candidates: limitedCandidates,
       cache,
       force: options.force,
     });
-    const limitedCandidates = limitCandidates(candidates, maxStrings);
+    const cachedIssues = getCachedIssues({
+      cache,
+      candidates: cachedCandidates,
+    });
 
     if (limitedCandidates.length === 0) {
-      console.log("No pending strings after prefilter and cache checks.");
+      console.log("No reviewable strings after prefilter.");
       console.log(`Terms saved to ${termsPath}`);
       return;
     }
 
-    const batches = buildBatches(limitedCandidates, batchSize);
-    console.log(
-      `Reviewing ${limitedCandidates.length} strings in ${batches.length} batches...`,
+    let reviewRun: ReviewRunResult = {
+      issues: [] as ReviewedIssue[],
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      },
+      model: APP_CONFIG.openai.model,
+    };
+
+    if (pendingCandidates.length > 0) {
+      const batches = buildBatches(pendingCandidates, batchSize);
+      console.log(
+        `Reviewing ${pendingCandidates.length} new strings in ${batches.length} batches...`,
+      );
+      reviewRun = await reviewBatches({
+        client: openai,
+        batches,
+        terms,
+        concurrency: APP_CONFIG.review.concurrency,
+      });
+    } else {
+      console.log("No new strings to review. Using cached results only.");
+    }
+
+    const allIssues = [...cachedIssues, ...reviewRun.issues].sort((a, b) =>
+      a.key.localeCompare(b.key, "en"),
     );
-    const reviewRun = await reviewBatches({
-      client: openai,
-      batches,
-      terms,
-      concurrency: APP_CONFIG.review.concurrency,
-    });
 
     const result = buildProjectResult({
       projectId,
       model: reviewRun.model,
-      reviewedStringCount: limitedCandidates.length,
+      totalStringCount: limitedCandidates.length,
+      cachedStringCount: cachedCandidates.length,
+      reviewedStringCount: pendingCandidates.length,
       usage: reviewRun.usage,
-      issues: reviewRun.issues,
+      issues: allIssues,
     });
     const resultPath = saveProjectResult({
       dataDir,
@@ -118,12 +150,13 @@ program
     });
 
     const now = new Date().toISOString();
-    for (const candidate of limitedCandidates) {
-      const hasIssue = reviewRun.issues.some((issue) => issue.key === candidate.key);
+    const issuesByKey = new Map(reviewRun.issues.map((issue) => [issue.key, issue]));
+    for (const candidate of pendingCandidates) {
+      const issue = issuesByKey.get(candidate.key) ?? null;
       cache.items[candidate.hash] = {
         key: candidate.key,
         reviewedAt: now,
-        status: hasIssue ? "has_issue" : "clean",
+        issue,
       };
     }
     cache.rulesVersion = RULES_VERSION;
@@ -136,9 +169,13 @@ program
     console.log(`Input tokens: ${reviewRun.usage.inputTokens}`);
     console.log(`Output tokens: ${reviewRun.usage.outputTokens}`);
     console.log(`Total tokens: ${reviewRun.usage.totalTokens}`);
+    console.log(`Total strings: ${result.stats.totalStringCount}`);
+    console.log(`Cached strings: ${result.stats.cachedStringCount}`);
     console.log(`Reviewed strings: ${result.stats.reviewedStringCount}`);
     console.log(`Issue strings: ${result.stats.issueStringCount}`);
     console.log(`Issue count: ${result.stats.issueCount}`);
+    console.log(`Cached issue count: ${result.stats.cachedIssueCount}`);
+    console.log(`New issue count: ${result.stats.newIssueCount}`);
   });
 
 program
@@ -177,3 +214,23 @@ program.parseAsync(process.argv).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
+
+function getCachedIssues(input: {
+  cache: CacheFile;
+  candidates: Array<{ hash: string }>;
+}): ReviewedIssue[] {
+  const issues: ReviewedIssue[] = [];
+
+  for (const candidate of input.candidates) {
+    const entry = input.cache.items[candidate.hash];
+    if (!entry?.issue) {
+      continue;
+    }
+    issues.push({
+      ...entry.issue,
+      fromCache: true,
+    });
+  }
+
+  return issues;
+}
