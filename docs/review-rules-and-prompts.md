@@ -2,6 +2,28 @@
 
 这份文档定义第一版审核规则、完整提示词全文，以及 LLM 输入输出格式。
 
+## 当前实现
+
+当前代码实现与本文档的对应关系：
+
+- 规则定义：`src/config/rules.ts`
+- 环境变量读取：`src/config/env.ts`
+- Paratranz 客户端：`src/clients/paratranz.ts`
+- OpenAI 审核客户端：`src/clients/openai.ts`
+- 预过滤与分批：`src/core/batching.ts`
+- artifact 下载与解压：`src/core/export.ts`
+- 术语拉取：`src/core/terms.ts`
+- 词条解析：`src/core/parse.ts`
+- 缓存：`src/core/cache.ts`
+- 结果汇总：`src/core/result.ts`
+- CLI 入口：`src/cli.ts`
+
+当前默认环境变量：
+
+- `PARATRANZ_API_KEY`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`，默认值为 `gpt-4.1-mini`
+
 ## 设计原则
 
 - 模型只输出有问题的词条
