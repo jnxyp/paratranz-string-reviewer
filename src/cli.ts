@@ -142,6 +142,9 @@ program
           maxBatchRetries: config.review.batchMaxRetries,
           onBatchComplete: (batchResult) => {
             if (batchResult.skipped) {
+              console.log(
+                `Batch ${batchResult.batchIndex}/${batchResult.totalBatches}: skipped`,
+              );
               return;
             }
             cache.upsertReviewedBatch({
@@ -149,10 +152,19 @@ program
               issues: batchResult.issues,
               reviewedAt: new Date().toISOString(),
             });
+            const batchIssueSummary =
+              batchResult.issues.length === 0
+                ? "none"
+                : batchResult.issues
+                    .map((issue) => `${issue.key} [${issue.hits.map((hit) => hit.rid).join(",")}]`)
+                    .join("; ");
+            console.log(
+              `Batch ${batchResult.batchIndex}/${batchResult.totalBatches}: issues ${batchResult.issues.length}, input toks ${batchResult.usage.inputTokens}, output toks ${batchResult.usage.outputTokens}, new issues: ${batchIssueSummary}`,
+            );
           },
           onProgress: (progress) => {
             console.log(
-              `Progress: batches ${progress.completedBatches}/${progress.totalBatches}, strings ${progress.completedStrings}/${progress.totalStrings}, issues ${progress.issueCount}, skipped batches ${progress.skippedBatches}, input toks ${progress.inputTokens}, output toks ${progress.outputTokens}`,
+              `Progress: batches ${progress.completedBatches}/${progress.totalBatches}, strings ${progress.completedStrings}/${progress.totalStrings}, total issues ${progress.issueCount}, skipped batches ${progress.skippedBatches}, input toks ${progress.inputTokens}, output toks ${progress.outputTokens}`,
             );
           },
         });
@@ -236,6 +248,23 @@ program
     });
     console.log(`Terms saved: ${result.path}`);
     console.log(`Term count: ${result.terms.length}`);
+  });
+
+program
+  .command("clear-cache")
+  .option("--config <path>", "Path to config JSON")
+  .option("--config-json <json>", "Inline config JSON")
+  .option("--project <id>", "Override project id")
+  .action((options) => {
+    const config = applyProjectOverride(resolveConfig(options), options.project);
+    const cachePath = getCachePath(dataDir, config.projectId);
+    const cache = new CacheStore(cachePath);
+    try {
+      cache.clear();
+      console.log(`Cleared cache: ${cachePath}`);
+    } finally {
+      cache.close();
+    }
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {

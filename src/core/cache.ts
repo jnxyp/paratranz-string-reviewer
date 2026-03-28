@@ -105,6 +105,11 @@ export class CacheStore {
     this.db.close();
   }
 
+  clear(): void {
+    this.clearEntriesStmt.run();
+    this.setMetaStmt.run("rules_version", getRulesVersion());
+  }
+
   splitCandidates(candidates: ReviewCandidate[], force = false): {
     cachedCandidates: ReviewCandidate[];
     pendingCandidates: ReviewCandidate[];

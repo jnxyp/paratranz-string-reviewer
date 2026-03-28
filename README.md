@@ -7,7 +7,7 @@
 - 拉取术语表
 - 过滤可审核词条
 - 分批调用 LLM 审核
-- 输出结构化结果到 `data/results/`
+- 输出结构化结果到 `output/`
 
 ## 使用
 
@@ -29,21 +29,27 @@ pnpm install
 常用命令：
 
 ```bash
-pnpm exec tsx src/cli.ts terms
-pnpm exec tsx src/cli.ts export
-pnpm exec tsx src/cli.ts run
+pnpm terms
+pnpm export
+pnpm review
 ```
 
 推荐先这样跑：
 
 ```bash
-pnpm exec tsx src/cli.ts run
+pnpm review
 ```
 
 如果想忽略缓存：
 
 ```bash
-pnpm exec tsx src/cli.ts run --no-cache
+pnpm review --no-cache
+```
+
+清空缓存：
+
+```bash
+pnpm clear-cache
 ```
 
 审核参数、规则和提示词都在 [config.json](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/config.json)。  

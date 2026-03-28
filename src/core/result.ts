@@ -129,7 +129,7 @@ export function saveProjectResult(input: {
   result: ProjectResult;
 }): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const path = join(input.dataDir, "results", `project-${input.projectId}-${stamp}.json`);
+  const path = join(process.cwd(), "output", `project-${input.projectId}-${stamp}.json`);
   writeJsonFile(path, input.result);
   return path;
 }

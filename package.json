@@ -11,7 +11,11 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli.ts",
-    "run": "tsx src/cli.ts run"
+    "run": "tsx src/cli.ts run",
+    "review": "tsx src/cli.ts run",
+    "terms": "tsx src/cli.ts terms",
+    "export": "tsx src/cli.ts export",
+    "clear-cache": "tsx src/cli.ts clear-cache"
   },
   "keywords": [
     "paratranz",
