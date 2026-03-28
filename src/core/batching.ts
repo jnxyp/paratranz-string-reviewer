@@ -1,4 +1,5 @@
 import { buildStringHash, type CacheFile } from "./cache.js";
+import { APP_CONFIG } from "../config/app-config.js";
 import type { ParsedString } from "./parse.js";
 
 export interface ReviewCandidate extends ParsedString {
@@ -63,7 +64,19 @@ export function buildBatches(candidates: ReviewCandidate[], batchSize: number): 
   return batches;
 }
 
+export function limitCandidates(
+  candidates: ReviewCandidate[],
+  maxStrings?: number,
+): ReviewCandidate[] {
+  if (!maxStrings || maxStrings <= 0) {
+    return candidates;
+  }
+
+  return candidates.slice(0, maxStrings);
+}
+
 function shouldReview(item: ParsedString): boolean {
+  const prefilter = APP_CONFIG.review.prefilter;
   const original = item.original.trim();
   const translation = item.translation.trim();
 
@@ -71,15 +84,21 @@ function shouldReview(item: ParsedString): boolean {
     return false;
   }
 
-  if (original.length < 10 || translation.length < 10) {
+  if (
+    original.length < prefilter.minOriginalLength ||
+    translation.length < prefilter.minTranslationLength
+  ) {
     return false;
   }
 
-  if (!containsWordChar(original) && !containsWordChar(translation)) {
+  if (prefilter.requireWordChar && !containsWordChar(original) && !containsWordChar(translation)) {
     return false;
   }
 
-  if (isPunctuationOnly(original) || isPunctuationOnly(translation)) {
+  if (
+    prefilter.skipPunctuationOnly &&
+    (isPunctuationOnly(original) || isPunctuationOnly(translation))
+  ) {
     return false;
   }
 

@@ -1,0 +1,53 @@
+{
+  "openai": {
+    "model": "gpt-5.4-mini"
+  },
+  "review": {
+    "rulesVersion": "v1",
+    "batchSize": 50,
+    "exportRetries": 5,
+    "exportWaitMs": 3000,
+    "prefilter": {
+      "minOriginalLength": 10,
+      "minTranslationLength": 10,
+      "requireWordChar": true,
+      "skipPunctuationOnly": true
+    }
+  },
+  "prompts": {
+    "system": "你是一个中文翻译审核助手。\n\n输入包含：\n- 审核规则\n- 术语表\n- 一批翻译词条\n\n你的任务是找出有问题的词条，并按规则 ID 返回命中结果。\n\n输出要求：\n- 只输出有问题的词条\n- 输出合法 JSON\n- 输出字段尽量短",
+    "userTemplate": "请审核下面这批翻译词条。\n\n【任务】\n- 只输出有问题的词条\n- 输入中的 key 是短编号，仅用于定位\n- 词条已经按 key 排序\n- 按规则 ID 返回命中结果\n\n【规则】\n{{RULES_JSON}}\n\n【术语表】\n{{TERMS_JSON}}\n\n【输出格式】\n- 输出必须是 JSON 对象\n- 顶层字段固定为 issues\n- 如果没有问题，返回 {\"issues\":[]}\n- 每个 issue 只包含 key 和 hits\n- hits 是对象数组\n- 每个 hit 包含 rid\n- 每个 hit 可选包含 reason\n- reason 尽量简短\n\n【词条】\n{{STRINGS_JSON}}"
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "desc": "译文有明显输入错误，如错别字、漏字、多字或误输入字符",
+      "severity": "error",
+      "category": "typo"
+    },
+    {
+      "id": "R2",
+      "desc": "译文存在明显叠字或重复片段",
+      "severity": "error",
+      "category": "duplicate_text"
+    },
+    {
+      "id": "R3",
+      "desc": "译文明显不符合术语表",
+      "severity": "error",
+      "category": "term_mismatch"
+    },
+    {
+      "id": "R4",
+      "desc": "原文与译文明显不对应",
+      "severity": "error",
+      "category": "source_target_mismatch"
+    },
+    {
+      "id": "R5",
+      "desc": "存在其他严重问题",
+      "severity": "error",
+      "category": "other"
+    }
+  ]
+}

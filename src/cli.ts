@@ -3,9 +3,14 @@ import { Command } from "commander";
 import { join } from "node:path";
 import { OpenAIReviewClient } from "./clients/openai.js";
 import { ParatranzClient } from "./clients/paratranz.js";
+import { APP_CONFIG } from "./config/app-config.js";
 import { loadEnv } from "./config/env.js";
 import { RULES_VERSION } from "./config/rules.js";
-import { buildBatches, buildReviewCandidates } from "./core/batching.js";
+import {
+  buildBatches,
+  buildReviewCandidates,
+  limitCandidates,
+} from "./core/batching.js";
 import { getCachePath, loadCache, saveCache } from "./core/cache.js";
 import { downloadAndExtractArtifact } from "./core/export.js";
 import { parseExtractedStrings } from "./core/parse.js";
@@ -28,11 +33,17 @@ program
 program
   .command("run")
   .requiredOption("--project <id>", "Paratranz project id")
-  .option("--batch-size <number>", "Batch size", "50")
+  .option("--batch-size <number>", "Batch size")
+  .option("--max-strings <number>", "Only review the first N candidate strings")
   .option("--force", "Ignore review cache")
   .action(async (options) => {
     const projectId = Number.parseInt(options.project, 10);
-    const batchSize = Number.parseInt(options.batchSize, 10);
+    const batchSize = options.batchSize
+      ? Number.parseInt(options.batchSize, 10)
+      : APP_CONFIG.review.batchSize;
+    const maxStrings = options.maxStrings
+      ? Number.parseInt(options.maxStrings, 10)
+      : undefined;
 
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for reviewer run.");
@@ -41,7 +52,7 @@ program
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const openai = new OpenAIReviewClient({
       apiKey: env.OPENAI_API_KEY,
-      model: env.OPENAI_MODEL,
+      model: APP_CONFIG.openai.model,
     });
 
     console.log(`Project: ${projectId}`);
@@ -50,6 +61,8 @@ program
       client: paratranz,
       projectId,
       dataDir,
+      retries: APP_CONFIG.review.exportRetries,
+      waitMs: APP_CONFIG.review.exportWaitMs,
     });
 
     console.log("Fetching terms...");
@@ -72,15 +85,18 @@ program
       cache,
       force: options.force,
     });
+    const limitedCandidates = limitCandidates(candidates, maxStrings);
 
-    if (candidates.length === 0) {
+    if (limitedCandidates.length === 0) {
       console.log("No pending strings after prefilter and cache checks.");
       console.log(`Terms saved to ${termsPath}`);
       return;
     }
 
-    const batches = buildBatches(candidates, batchSize);
-    console.log(`Reviewing ${candidates.length} strings in ${batches.length} batches...`);
+    const batches = buildBatches(limitedCandidates, batchSize);
+    console.log(
+      `Reviewing ${limitedCandidates.length} strings in ${batches.length} batches...`,
+    );
     const reviewedIssues = await reviewBatches({
       client: openai,
       batches,
@@ -99,7 +115,7 @@ program
     });
 
     const now = new Date().toISOString();
-    for (const candidate of candidates) {
+    for (const candidate of limitedCandidates) {
       const hasIssue = reviewedIssues.some((issue) => issue.key === candidate.key);
       cache.items[candidate.hash] = {
         key: candidate.key,
@@ -126,6 +142,8 @@ program
       client: paratranz,
       projectId,
       dataDir,
+      retries: APP_CONFIG.review.exportRetries,
+      waitMs: APP_CONFIG.review.exportWaitMs,
     });
     console.log(`Artifact: ${artifact.artifactPath}`);
     console.log(`Extracted: ${artifact.extractedDir}`);
