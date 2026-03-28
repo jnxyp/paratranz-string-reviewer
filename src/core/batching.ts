@@ -1,5 +1,5 @@
 import { buildStringHash, type CacheFile } from "./cache.js";
-import { APP_CONFIG } from "../config/config.js";
+import { getAppConfig } from "../config/config.js";
 import type { ParsedString } from "./parse.js";
 
 export interface ReviewCandidate extends ParsedString {
@@ -95,7 +95,7 @@ export function limitCandidates(
 }
 
 function shouldReview(item: ParsedString): boolean {
-  const prefilter = APP_CONFIG.review.prefilter;
+  const prefilter = getAppConfig().review.prefilter;
   const original = item.original.trim();
   const translation = item.translation.trim();
 

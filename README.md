@@ -19,6 +19,8 @@
 
 ## 使用
 
+CLI 默认读取当前目录下的 [config.json](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/config.json)。
+
 先在 [`.env.example`](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/.env.example) 的基础上准备 [`.env`](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/.env)，至少包含：
 
 ```env
@@ -35,21 +37,28 @@ pnpm install
 常用命令：
 
 ```bash
-pnpm exec tsx src/cli.ts terms --project 3489
-pnpm exec tsx src/cli.ts export --project 3489
-pnpm exec tsx src/cli.ts run --project 3489
+pnpm exec tsx src/cli.ts terms
+pnpm exec tsx src/cli.ts export
+pnpm exec tsx src/cli.ts run
 ```
 
-先做小批量测试时可以用：
+也可以显式指定配置文件：
 
 ```bash
-pnpm exec tsx src/cli.ts run --project 3489 --batch-size 10 --max-strings 50 --force
+pnpm exec tsx src/cli.ts run --config ./config.json
 ```
 
-运行结果会写到 `data/results/`。审核参数、规则和提示词在 [src/config/config.ts](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/src/config/config.ts)。
+或者直接传一段 JSON：
+
+```bash
+pnpm exec tsx src/cli.ts run --config-json '{"projectId":3489,"openai":{"model":"gpt-5.4-mini"},"review":{"rulesVersion":"v1","batchSize":10,"maxStrings":50,"force":true,"concurrency":1,"exportRetries":5,"exportWaitMs":3000,"prefilter":{"minOriginalLength":10,"minTranslationLength":10,"requireWordChar":true,"skipPunctuationOnly":true}},"prompts":{"system":"...","userTemplate":"..."},"rules":[...]}'
+```
+
+运行结果会写到 `data/results/`。审核参数、规则和提示词都在 [config.json](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/config.json)。
 
 ## 文档
 
-- 运行时配置：[src/config/config.ts](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/src/config/config.ts)
+- 运行时配置：[config.json](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/config.json)
+- 配置 schema 与加载逻辑：[src/config/config.ts](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/src/config/config.ts)
 - 审核规则、提示词与 I/O 规范：[docs/review-rules-and-prompts.md](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/docs/review-rules-and-prompts.md)
 - Paratranz OpenAPI 文档副本：[docs/paratranz-api.yml](/home/jn_xyp/ProjectsLocal/paratranz-string-reviewer/docs/paratranz-api.yml)

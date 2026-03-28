@@ -1,8 +1,8 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { RULES_VERSION } from "../config/rules.js";
 import type { RuleId } from "../config/rules.js";
+import { getRulesVersion } from "../config/rules.js";
 import { sha256 } from "../utils/hash.js";
 import { readJsonFile, writeJsonFile } from "../utils/json.js";
 
@@ -39,7 +39,7 @@ export function getCachePath(dataDir: string, projectId: number): string {
 export function loadCache(path: string): CacheFile {
   try {
     const cache = cacheFileSchema.parse(readJsonFile(path));
-    if (cache.rulesVersion !== RULES_VERSION) {
+    if (cache.rulesVersion !== getRulesVersion()) {
       rmSync(path, { force: true });
       return createEmptyCache();
     }
@@ -64,7 +64,7 @@ export function buildStringHash(input: {
 
 function createEmptyCache(): CacheFile {
   return {
-    rulesVersion: RULES_VERSION,
+    rulesVersion: getRulesVersion(),
     items: {},
   };
 }

@@ -1,27 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { APP_CONFIG } from "../config/config.js";
-import { REVIEW_RULES, type RuleId } from "../config/rules.js";
-
-const validRuleIds = new Set(REVIEW_RULES.map((rule) => rule.id));
-
-const hitSchema = z.object({
-  rid: z
-    .string()
-    .refine((value): value is RuleId => validRuleIds.has(value as RuleId), "Invalid rule id"),
-  reason: z.string().optional(),
-});
-
-const issueSchema = z.object({
-  key: z.string(),
-  hits: z.array(hitSchema),
-});
-
-const reviewResponseSchema = z.object({
-  issues: z.array(issueSchema),
-});
-
-export type ReviewResponse = z.infer<typeof reviewResponseSchema>;
+import { getAppConfig, type RuleId } from "../config/config.js";
+import { getReviewRules } from "../config/rules.js";
 
 export interface OpenAIReviewString {
   key: string;
@@ -29,19 +9,19 @@ export interface OpenAIReviewString {
   t: string;
 }
 
-const SYSTEM_PROMPT = APP_CONFIG.prompts.system;
-
 function buildUserPrompt(input: {
   strings: OpenAIReviewString[];
   terms: Array<{ term: string; translation: string; note?: string; variants?: string[] }>;
 }): string {
+  const config = getAppConfig();
+  const reviewRules = getReviewRules();
   const rulesJson = JSON.stringify(
-    REVIEW_RULES.map(({ id, criteria, report }) => ({ id, criteria, report })),
+    reviewRules.map(({ id, criteria, report }) => ({ id, criteria, report })),
   );
   const termsJson = JSON.stringify(input.terms);
   const stringsJson = JSON.stringify(input.strings);
 
-  return APP_CONFIG.prompts.userTemplate
+  return config.prompts.userTemplate
     .replace("{{RULES_JSON}}", rulesJson)
     .replace("{{TERMS_JSON}}", termsJson)
     .replace("{{STRINGS_JSON}}", stringsJson);
@@ -59,7 +39,13 @@ export interface ReviewUsage {
 }
 
 export interface ReviewBatchResult {
-  issues: ReviewResponse["issues"];
+  issues: Array<{
+    key: string;
+    hits: Array<{
+      rid: RuleId;
+      reason?: string;
+    }>;
+  }>;
   usage: ReviewUsage;
   model: string;
 }
@@ -77,14 +63,15 @@ export class OpenAIReviewClient {
     strings: OpenAIReviewString[];
     terms: Array<{ term: string; translation: string; note?: string; variants?: string[] }>;
   }): Promise<ReviewBatchResult> {
+    const responseSchema = buildReviewResponseSchema();
     const response = await this.client.responses.create({
       model: this.model,
-      instructions: SYSTEM_PROMPT,
+      instructions: getAppConfig().prompts.system,
       input: buildUserPrompt(input),
     });
 
     const raw = response.output_text.trim();
-    const parsed = reviewResponseSchema.parse(JSON.parse(raw));
+    const parsed = responseSchema.parse(JSON.parse(raw));
 
     return {
       issues: parsed.issues,
@@ -97,6 +84,27 @@ export class OpenAIReviewClient {
     };
   }
 
-  static schema = reviewResponseSchema;
-  static hitIds = REVIEW_RULES.map((rule) => rule.id) as RuleId[];
+  static hitIds(): string[] {
+    return getReviewRules().map((rule) => rule.id);
+  }
+}
+
+function buildReviewResponseSchema() {
+  const validRuleIds = new Set(getReviewRules().map((rule) => rule.id));
+
+  const hitSchema = z.object({
+    rid: z
+      .string()
+      .refine((value): value is RuleId => validRuleIds.has(value as RuleId), "Invalid rule id"),
+    reason: z.string().optional(),
+  });
+
+  const issueSchema = z.object({
+    key: z.string(),
+    hits: z.array(hitSchema),
+  });
+
+  return z.object({
+    issues: z.array(issueSchema),
+  });
 }

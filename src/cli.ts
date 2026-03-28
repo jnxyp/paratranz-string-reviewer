@@ -3,9 +3,13 @@ import { Command } from "commander";
 import { join } from "node:path";
 import { OpenAIReviewClient } from "./clients/openai.js";
 import { ParatranzClient } from "./clients/paratranz.js";
-import { APP_CONFIG } from "./config/config.js";
+import {
+  getDefaultConfigPath,
+  loadAppConfig,
+  type AppConfig,
+} from "./config/config.js";
 import { loadEnv } from "./config/env.js";
-import { RULES_VERSION } from "./config/rules.js";
+import { getRulesVersion } from "./config/rules.js";
 import {
   buildBatches,
   buildReviewCandidates,
@@ -37,18 +41,13 @@ program
 
 program
   .command("run")
-  .requiredOption("--project <id>", "Paratranz project id")
-  .option("--batch-size <number>", "Batch size")
-  .option("--max-strings <number>", "Only review the first N candidate strings")
-  .option("--force", "Ignore review cache")
+  .option("--config <path>", "Path to config JSON")
+  .option("--config-json <json>", "Inline config JSON")
   .action(async (options) => {
-    const projectId = Number.parseInt(options.project, 10);
-    const batchSize = options.batchSize
-      ? Number.parseInt(options.batchSize, 10)
-      : APP_CONFIG.review.batchSize;
-    const maxStrings = options.maxStrings
-      ? Number.parseInt(options.maxStrings, 10)
-      : undefined;
+    const config = resolveConfig(options);
+    const projectId = config.projectId;
+    const batchSize = config.review.batchSize;
+    const maxStrings = config.review.maxStrings ?? undefined;
 
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is required for reviewer run.");
@@ -57,7 +56,7 @@ program
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const openai = new OpenAIReviewClient({
       apiKey: env.OPENAI_API_KEY,
-      model: APP_CONFIG.openai.model,
+      model: config.openai.model,
     });
 
     console.log(`Project: ${projectId}`);
@@ -66,8 +65,8 @@ program
       client: paratranz,
       projectId,
       dataDir,
-      retries: APP_CONFIG.review.exportRetries,
-      waitMs: APP_CONFIG.review.exportWaitMs,
+      retries: config.review.exportRetries,
+      waitMs: config.review.exportWaitMs,
     });
 
     console.log("Fetching terms...");
@@ -92,7 +91,7 @@ program
     const { cachedCandidates, pendingCandidates } = splitCandidatesByCache({
       candidates: limitedCandidates,
       cache,
-      force: options.force,
+      force: config.review.force,
     });
     const cachedIssues = getCachedIssues({
       cache,
@@ -112,7 +111,7 @@ program
         outputTokens: 0,
         totalTokens: 0,
       },
-      model: APP_CONFIG.openai.model,
+      model: config.openai.model,
     };
 
     if (pendingCandidates.length > 0) {
@@ -124,7 +123,7 @@ program
         client: openai,
         batches,
         terms,
-        concurrency: APP_CONFIG.review.concurrency,
+        concurrency: config.review.concurrency,
       });
     } else {
       console.log("No new strings to review. Using cached results only.");
@@ -159,7 +158,7 @@ program
         issue,
       };
     }
-    cache.rulesVersion = RULES_VERSION;
+    cache.rulesVersion = getRulesVersion();
     saveCache(cachePath, cache);
 
     console.log(`Artifact: ${artifact.artifactPath}`);
@@ -180,16 +179,18 @@ program
 
 program
   .command("export")
-  .requiredOption("--project <id>", "Paratranz project id")
+  .option("--config <path>", "Path to config JSON")
+  .option("--config-json <json>", "Inline config JSON")
   .action(async (options) => {
-    const projectId = Number.parseInt(options.project, 10);
+    const config = resolveConfig(options);
+    const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const artifact = await downloadAndExtractArtifact({
       client: paratranz,
       projectId,
       dataDir,
-      retries: APP_CONFIG.review.exportRetries,
-      waitMs: APP_CONFIG.review.exportWaitMs,
+      retries: config.review.exportRetries,
+      waitMs: config.review.exportWaitMs,
     });
     console.log(`Artifact: ${artifact.artifactPath}`);
     console.log(`Extracted: ${artifact.extractedDir}`);
@@ -197,9 +198,11 @@ program
 
 program
   .command("terms")
-  .requiredOption("--project <id>", "Paratranz project id")
+  .option("--config <path>", "Path to config JSON")
+  .option("--config-json <json>", "Inline config JSON")
   .action(async (options) => {
-    const projectId = Number.parseInt(options.project, 10);
+    const config = resolveConfig(options);
+    const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const result = await fetchAndSaveTerms({
       client: paratranz,
@@ -214,6 +217,22 @@ program.parseAsync(process.argv).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
+
+function resolveConfig(options: { config?: string; configJson?: string }): AppConfig {
+  const config = loadAppConfig({
+    configPath: options.config,
+    configJson: options.configJson,
+  });
+
+  const source = options.configJson
+    ? "inline JSON"
+    : options.config
+      ? options.config
+      : getDefaultConfigPath();
+  console.log(`Config: ${source}`);
+
+  return config;
+}
 
 function getCachedIssues(input: {
   cache: CacheFile;

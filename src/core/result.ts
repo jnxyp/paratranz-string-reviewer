@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import {
-  REVIEW_RULES,
-  RULES_BY_ID,
-  RULES_VERSION,
+  getReviewRules,
+  getRulesById,
+  getRulesVersion,
   type Category,
   type ReviewRule,
 } from "../config/rules.js";
@@ -62,11 +62,14 @@ export function buildProjectResult(input: {
   };
   issues: ReviewedIssue[];
 }): ProjectResult {
+  const reviewRules = getReviewRules();
+  const rulesById = getRulesById();
+
   return {
     projectId: input.projectId,
     generatedAt: new Date().toISOString(),
     model: input.model,
-    rulesVersion: RULES_VERSION,
+    rulesVersion: getRulesVersion(),
     stats: {
       totalStringCount: input.totalStringCount,
       cachedStringCount: input.cachedStringCount,
@@ -81,9 +84,9 @@ export function buildProjectResult(input: {
         .reduce((sum, issue) => sum + issue.hits.length, 0),
     },
     usage: input.usage,
-    rules: [...REVIEW_RULES],
+    rules: reviewRules,
     issues: input.issues.map((issue) => {
-      const firstRule = RULES_BY_ID[issue.hits[0]!.rid];
+      const firstRule = getRequiredRule(rulesById, issue.hits[0]!.rid);
       return {
         filePath: issue.filePath,
         key: issue.key,
@@ -95,7 +98,7 @@ export function buildProjectResult(input: {
         hits: issue.hits.map((hit) => ({
           rid: hit.rid,
           reason: hit.reason,
-          rule: RULES_BY_ID[hit.rid],
+          rule: getRequiredRule(rulesById, hit.rid),
         })),
       };
     }),
@@ -104,6 +107,17 @@ export function buildProjectResult(input: {
 
 function buildStringUrl(projectId: number, key: string): string {
   return `https://paratranz.cn/projects/${projectId}/strings?key=${encodeURIComponent(key)}`;
+}
+
+function getRequiredRule(
+  rulesById: Record<string, ReviewRule>,
+  ruleId: string,
+): ReviewRule {
+  const rule = rulesById[ruleId];
+  if (!rule) {
+    throw new Error(`Unknown rule id in result: ${ruleId}`);
+  }
+  return rule;
 }
 
 export function saveProjectResult(input: {

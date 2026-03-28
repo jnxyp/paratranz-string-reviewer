@@ -2,8 +2,9 @@
 
 这份文档定义第一版审核规则、完整提示词全文，以及 LLM 输入输出格式。
 
-实际运行时，模型、提示词模板、规则、批大小、导出重试和预过滤阈值都由 [src/config/config.ts](../src/config/config.ts) 提供。
-当前审核并发数也由同一个配置文件控制，默认值为 `1`。
+实际运行时，项目 ID、模型、提示词模板、规则、批大小、缓存策略、导出重试和预过滤阈值都由 [config.json](../config.json) 提供。
+配置 schema 和加载逻辑在 [src/config/config.ts](../src/config/config.ts)。
+当前审核并发数也由同一个 JSON 配置控制，默认值为 `1`。
 
 ## 当前实现
 
@@ -21,11 +22,10 @@
 - 结果汇总：`src/core/result.ts`
 - CLI 入口：`src/cli.ts`
 
-当前默认环境变量：
+当前环境变量：
 
 - `PARATRANZ_API_KEY`
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL`，默认值为 `gpt-4.1-mini`
 
 ## 设计原则
 
@@ -110,6 +110,8 @@
   // R5 当前停用
 ]
 ```
+
+CLI 默认读取当前工作目录下的 `config.json`，也支持通过 `--config` 指定配置文件路径，或通过 `--config-json` 直接传入配置 JSON。
 
 ## 审核边界
 
