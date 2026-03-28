@@ -360,6 +360,16 @@ function renderProjectResultHtml(result: ProjectResult): string {
       align-items: center;
       justify-content: flex-end;
     }
+    .pagination input {
+      width: 72px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-strong);
+      color: var(--text);
+      font: inherit;
+      text-align: center;
+    }
     .page-info {
       color: var(--muted);
       font-size: 13px;
@@ -535,12 +545,24 @@ function renderProjectResultHtml(result: ProjectResult): string {
         <div class="toolbar">
           <span class="summary" id="result-summary"></span>
           <div class="pagination">
-            <span class="page-info" id="page-info"></span>
-            <button id="prev-page" type="button">上一页</button>
-            <button id="next-page" type="button">下一页</button>
+            <span class="page-info" id="page-info-top"></span>
+            <button id="prev-page-top" type="button">上一页</button>
+            <input id="page-input-top" type="number" min="1" step="1" inputmode="numeric" aria-label="页码">
+            <button id="go-page-top" type="button">跳转</button>
+            <button id="next-page-top" type="button">下一页</button>
           </div>
         </div>
         <div class="issues" id="issues"></div>
+        <div class="toolbar">
+          <span class="summary"></span>
+          <div class="pagination">
+            <span class="page-info" id="page-info-bottom"></span>
+            <button id="prev-page-bottom" type="button">上一页</button>
+            <input id="page-input-bottom" type="number" min="1" step="1" inputmode="numeric" aria-label="页码">
+            <button id="go-page-bottom" type="button">跳转</button>
+            <button id="next-page-bottom" type="button">下一页</button>
+          </div>
+        </div>
       </main>
     </div>
   </div>
@@ -556,9 +578,26 @@ function renderProjectResultHtml(result: ProjectResult): string {
     const ruleFilters = document.getElementById("rule-filters");
     const issuesRoot = document.getElementById("issues");
     const resultSummary = document.getElementById("result-summary");
-    const pageInfo = document.getElementById("page-info");
-    const prevPageButton = document.getElementById("prev-page");
-    const nextPageButton = document.getElementById("next-page");
+    const pageInfos = [
+      document.getElementById("page-info-top"),
+      document.getElementById("page-info-bottom"),
+    ];
+    const prevPageButtons = [
+      document.getElementById("prev-page-top"),
+      document.getElementById("prev-page-bottom"),
+    ];
+    const nextPageButtons = [
+      document.getElementById("next-page-top"),
+      document.getElementById("next-page-bottom"),
+    ];
+    const pageInputs = [
+      document.getElementById("page-input-top"),
+      document.getElementById("page-input-bottom"),
+    ];
+    const goPageButtons = [
+      document.getElementById("go-page-top"),
+      document.getElementById("go-page-bottom"),
+    ];
     const pageSize = 20;
     let currentPage = 1;
 
@@ -623,9 +662,19 @@ function renderProjectResultHtml(result: ProjectResult): string {
 
       resultSummary.textContent =
         "当前显示问题词条 " + visibleIssues.length + " 条 · 命中 " + visibleHitCount + " 项";
-      pageInfo.textContent = "第 " + currentPage + " / " + totalPages + " 页";
-      prevPageButton.disabled = currentPage <= 1;
-      nextPageButton.disabled = currentPage >= totalPages;
+      pageInfos.forEach((item) => {
+        item.textContent = "第 " + currentPage + " / " + totalPages + " 页";
+      });
+      pageInputs.forEach((input) => {
+        input.value = String(currentPage);
+        input.max = String(totalPages);
+      });
+      prevPageButtons.forEach((button) => {
+        button.disabled = currentPage <= 1;
+      });
+      nextPageButtons.forEach((button) => {
+        button.disabled = currentPage >= totalPages;
+      });
 
       if (visibleIssues.length === 0) {
         issuesRoot.innerHTML = '<div class="empty">当前筛选条件下没有结果。</div>';
@@ -665,6 +714,22 @@ function renderProjectResultHtml(result: ProjectResult): string {
       }).join("");
     }
 
+    function scrollToIssuesTop() {
+      issuesRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function goToPage(page) {
+      const visibleIssues = getVisibleIssues();
+      const totalPages = Math.max(1, Math.ceil(visibleIssues.length / pageSize));
+      const nextPage = Math.min(Math.max(page, 1), totalPages);
+      if (nextPage === currentPage) {
+        return;
+      }
+      currentPage = nextPage;
+      renderIssues();
+      scrollToIssuesTop();
+    }
+
     document.getElementById("select-all").addEventListener("click", () => {
       state.selectedRules = new Set(rules.map((rule) => rule.id));
       currentPage = 1;
@@ -679,15 +744,36 @@ function renderProjectResultHtml(result: ProjectResult): string {
       renderIssues();
     });
 
-    prevPageButton.addEventListener("click", () => {
-      if (currentPage <= 1) return;
-      currentPage -= 1;
-      renderIssues();
+    prevPageButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        goToPage(currentPage - 1);
+      });
     });
 
-    nextPageButton.addEventListener("click", () => {
-      currentPage += 1;
-      renderIssues();
+    nextPageButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        goToPage(currentPage + 1);
+      });
+    });
+
+    goPageButtons.forEach((button, index) => {
+      button.addEventListener("click", () => {
+        const raw = Number.parseInt(pageInputs[index].value, 10);
+        if (Number.isNaN(raw)) {
+          pageInputs[index].value = String(currentPage);
+          return;
+        }
+        goToPage(raw);
+      });
+    });
+
+    pageInputs.forEach((input, index) => {
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        goPageButtons[index].click();
+      });
     });
 
     renderRuleFilters();
