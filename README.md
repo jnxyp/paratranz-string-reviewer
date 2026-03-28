@@ -7,7 +7,7 @@
 - 拉取术语表
 - 过滤可审核词条
 - 分批调用 LLM 审核
-- 输出结构化 JSON 和单文件 HTML 结果到 `output/`
+- 输出结构化 JSON 和单文件 HTML 报告到 `output/`
 
 ## 使用
 
@@ -39,6 +39,15 @@ pnpm review
 ```bash
 pnpm review
 ```
+
+运行完成后会在 `output/` 里生成：
+- `project-xxxx.json`
+- `project-xxxx.html`
+
+HTML 报告是单文件，支持：
+- 按规则筛选
+- 分页查看结果
+- 直接跳转到 Paratranz 词条
 
 如果想忽略缓存：
 
