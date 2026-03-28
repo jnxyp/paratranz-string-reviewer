@@ -6,11 +6,11 @@
   },
   "review": {
     "rulesVersion": "v1",
-    "batchSize": 50,
+    "batchSize": 100,
     "batchMaxRetries": 2,
     "maxStrings": null,
     "force": false,
-    "concurrency": 1,
+    "concurrency": 3,
     "exportRetries": 5,
     "exportWaitMs": 3000,
     "prefilter": {
@@ -21,8 +21,8 @@
     }
   },
   "prompts": {
-    "system": "你是一个中文翻译审核助手。\n\n输入包含：\n- 审核规则\n- 术语表\n- 一批翻译词条\n\n你的任务是找出有问题的词条，并按规则 ID 返回命中结果。\n\n输出要求：\n- 只输出有问题的词条\n- 输出合法 JSON\n- 输出字段尽量短",
-    "userTemplate": "请审核下面这批翻译词条。\n\n【任务】\n- 只输出有问题的词条\n- 输入中的 key 是短编号，仅用于定位\n- 词条已经按 key 排序\n- 按规则 ID 返回命中结果\n\n【规则】\n{{RULES_JSON}}\n\n【术语表】\n{{TERMS_JSON}}\n\n- 术语是否适用需要结合 note 判断\n- 只有 note 和当前词条都支持时，才按术语表判定\n\n【输出格式】\n- 输出必须是 JSON 对象\n- 顶层字段固定为 issues\n- 如果没有问题，返回 {\"issues\":[]}\n- 每个 issue 只包含 key 和 hits\n- hits 是对象数组\n- 每个 hit 包含 rid\n- 每个 hit 可选包含 reason\n- reason 尽量简短\n\n【词条】\n{{STRINGS_JSON}}"
+    "system": "你是一个中文翻译审核助手。\n\n输入包含：\n- 审核规则\n- 术语表\n- 一批翻译词条\n\n你的任务是找出有问题的词条，并按规则 ID 返回命中结果。\n\n重要约束：\n- 只检查译文问题，不检查原文问题\n- 不要纠正原文中的错别字、命名或设定\n- 只有当这些问题实际出现在译文里时，才能报错\n\n输出要求：\n- 只输出有问题的词条\n- 输出合法 JSON\n- 输出字段尽量短",
+    "userTemplate": "请审核下面这批翻译词条。\n\n【任务】\n- 只输出有问题的词条\n- 输入中的 key 是短编号，仅用于定位\n- 词条已经按 key 排序\n- 按规则 ID 返回命中结果\n- 只检查译文问题，不要因为原文本身的问题报错\n\n【规则】\n{{RULES_JSON}}\n\n【术语表】\n{{TERMS_JSON}}\n\n- 术语是否适用需要结合 note 判断\n- 只有 note 和当前词条都支持时，才按术语表判定\n\n【输出格式】\n- 输出必须是 JSON 对象\n- 顶层字段固定为 issues\n- 如果没有问题，返回 {\"issues\":[]}\n- 每个 issue 只包含 key 和 hits\n- hits 是对象数组\n- 每个 hit 包含 rid\n- 每个 hit 可选包含 reason\n- reason 尽量简短\n\n【词条】\n{{STRINGS_JSON}}"
   },
   "rules": [
     {
