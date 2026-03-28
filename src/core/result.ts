@@ -1,49 +1,93 @@
 import { join } from "node:path";
-import { RULES_BY_ID, RULES_VERSION, type Category, type Severity } from "../config/rules.js";
+import {
+  REVIEW_RULES,
+  RULES_BY_ID,
+  RULES_VERSION,
+  type Category,
+  type ReviewRule,
+} from "../config/rules.js";
 import type { ReviewedIssue } from "./review.js";
 import { writeJsonFile } from "../utils/json.js";
+
+export interface ResultHit {
+  rid: ReviewedIssue["hits"][number]["rid"];
+  reason?: string;
+  rule: ReviewRule;
+}
 
 export interface ProjectIssueResult {
   filePath: string;
   key: string;
+  stringUrl: string;
   original: string;
   translation: string;
-  severity: Severity;
   category: Category;
-  hits: ReviewedIssue["hits"];
+  hits: ResultHit[];
 }
 
 export interface ProjectResult {
   projectId: number;
   generatedAt: string;
+  model: string;
   rulesVersion: string;
-  sourceArtifact: string;
+  stats: {
+    reviewedStringCount: number;
+    issueStringCount: number;
+    issueCount: number;
+  };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  rules: ReviewRule[];
   issues: ProjectIssueResult[];
 }
 
 export function buildProjectResult(input: {
   projectId: number;
-  artifactPath: string;
+  model: string;
+  reviewedStringCount: number;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
   issues: ReviewedIssue[];
 }): ProjectResult {
   return {
     projectId: input.projectId,
     generatedAt: new Date().toISOString(),
+    model: input.model,
     rulesVersion: RULES_VERSION,
-    sourceArtifact: input.artifactPath,
+    stats: {
+      reviewedStringCount: input.reviewedStringCount,
+      issueStringCount: input.issues.length,
+      issueCount: input.issues.reduce((sum, issue) => sum + issue.hits.length, 0),
+    },
+    usage: input.usage,
+    rules: [...REVIEW_RULES],
     issues: input.issues.map((issue) => {
       const firstRule = RULES_BY_ID[issue.hits[0]!.rid];
       return {
         filePath: issue.filePath,
         key: issue.key,
+        stringUrl: buildStringUrl(input.projectId, issue.key),
         original: issue.original,
         translation: issue.translation,
-        severity: firstRule.severity,
         category: firstRule.category,
-        hits: issue.hits,
+        hits: issue.hits.map((hit) => ({
+          rid: hit.rid,
+          reason: hit.reason,
+          rule: RULES_BY_ID[hit.rid],
+        })),
       };
     }),
   };
+}
+
+function buildStringUrl(projectId: number, key: string): string {
+  return `https://paratranz.cn/projects/${projectId}/strings?key=${encodeURIComponent(key)}`;
 }
 
 export function saveProjectResult(input: {

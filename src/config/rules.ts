@@ -1,10 +1,10 @@
-import { APP_CONFIG, type Category, type RuleId, type Severity } from "./config.js";
-export type { Category, RuleId, Severity } from "./config.js";
+import { APP_CONFIG, type Category, type RuleId } from "./config.js";
+export type { Category, RuleId } from "./config.js";
 
 export interface ReviewRule {
   id: RuleId;
-  desc: string;
-  severity: Severity;
+  criteria: string;
+  report: string;
   category: Category;
 }
 

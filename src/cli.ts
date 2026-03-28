@@ -97,16 +97,19 @@ program
     console.log(
       `Reviewing ${limitedCandidates.length} strings in ${batches.length} batches...`,
     );
-    const reviewedIssues = await reviewBatches({
+    const reviewRun = await reviewBatches({
       client: openai,
       batches,
       terms,
+      concurrency: APP_CONFIG.review.concurrency,
     });
 
     const result = buildProjectResult({
       projectId,
-      artifactPath: artifact.artifactPath,
-      issues: reviewedIssues,
+      model: reviewRun.model,
+      reviewedStringCount: limitedCandidates.length,
+      usage: reviewRun.usage,
+      issues: reviewRun.issues,
     });
     const resultPath = saveProjectResult({
       dataDir,
@@ -116,7 +119,7 @@ program
 
     const now = new Date().toISOString();
     for (const candidate of limitedCandidates) {
-      const hasIssue = reviewedIssues.some((issue) => issue.key === candidate.key);
+      const hasIssue = reviewRun.issues.some((issue) => issue.key === candidate.key);
       cache.items[candidate.hash] = {
         key: candidate.key,
         reviewedAt: now,
@@ -129,7 +132,13 @@ program
     console.log(`Artifact: ${artifact.artifactPath}`);
     console.log(`Terms: ${termsPath}`);
     console.log(`Result: ${resultPath}`);
-    console.log(`Issues found: ${reviewedIssues.length}`);
+    console.log(`Model: ${reviewRun.model}`);
+    console.log(`Input tokens: ${reviewRun.usage.inputTokens}`);
+    console.log(`Output tokens: ${reviewRun.usage.outputTokens}`);
+    console.log(`Total tokens: ${reviewRun.usage.totalTokens}`);
+    console.log(`Reviewed strings: ${result.stats.reviewedStringCount}`);
+    console.log(`Issue strings: ${result.stats.issueStringCount}`);
+    console.log(`Issue count: ${result.stats.issueCount}`);
   });
 
 program

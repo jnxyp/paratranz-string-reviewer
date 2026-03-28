@@ -36,7 +36,7 @@ function buildUserPrompt(input: {
   terms: Array<{ term: string; translation: string; note?: string; variants?: string[] }>;
 }): string {
   const rulesJson = JSON.stringify(
-    REVIEW_RULES.map(({ id, desc }) => ({ id, desc })),
+    REVIEW_RULES.map(({ id, criteria, report }) => ({ id, criteria, report })),
   );
   const termsJson = JSON.stringify(input.terms);
   const stringsJson = JSON.stringify(input.strings);
@@ -52,6 +52,18 @@ export interface OpenAIReviewClientOptions {
   model: string;
 }
 
+export interface ReviewUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface ReviewBatchResult {
+  issues: ReviewResponse["issues"];
+  usage: ReviewUsage;
+  model: string;
+}
+
 export class OpenAIReviewClient {
   private readonly client: OpenAI;
   private readonly model: string;
@@ -64,7 +76,7 @@ export class OpenAIReviewClient {
   async reviewBatch(input: {
     strings: OpenAIReviewString[];
     terms: Array<{ term: string; translation: string; note?: string; variants?: string[] }>;
-  }): Promise<ReviewResponse> {
+  }): Promise<ReviewBatchResult> {
     const response = await this.client.responses.create({
       model: this.model,
       instructions: SYSTEM_PROMPT,
@@ -72,7 +84,17 @@ export class OpenAIReviewClient {
     });
 
     const raw = response.output_text.trim();
-    return reviewResponseSchema.parse(JSON.parse(raw));
+    const parsed = reviewResponseSchema.parse(JSON.parse(raw));
+
+    return {
+      issues: parsed.issues,
+      model: this.model,
+      usage: {
+        inputTokens: response.usage?.input_tokens ?? 0,
+        outputTokens: response.usage?.output_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0,
+      },
+    };
   }
 
   static schema = reviewResponseSchema;

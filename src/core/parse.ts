@@ -7,6 +7,7 @@ export interface ParsedString {
   key: string;
   original: string;
   translation: string;
+  stage: number | null;
 }
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -44,9 +45,10 @@ function extractStrings(node: JsonValue, filePath: string): ParsedString[] {
     const original = typeof candidate.original === "string" ? candidate.original : null;
     const translation =
       typeof candidate.translation === "string" ? candidate.translation : null;
+    const stage = typeof candidate.stage === "number" ? candidate.stage : null;
 
     if (key && original !== null && translation !== null) {
-      results.push({ filePath, key, original, translation });
+      results.push({ filePath, key, original, translation, stage });
       return;
     }
 

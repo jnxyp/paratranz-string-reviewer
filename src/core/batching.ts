@@ -80,6 +80,10 @@ function shouldReview(item: ParsedString): boolean {
   const original = item.original.trim();
   const translation = item.translation.trim();
 
+  if (item.stage !== 1) {
+    return false;
+  }
+
   if (!translation) {
     return false;
   }

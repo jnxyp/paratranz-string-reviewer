@@ -1,3 +1,34 @@
+type ReviewRuleConfig = {
+  id: string;
+  criteria: string;
+  report: string;
+  category: string;
+};
+
+type AppConfigShape = {
+  openai: {
+    model: string;
+  };
+  review: {
+    rulesVersion: string;
+    batchSize: number;
+    concurrency: number;
+    exportRetries: number;
+    exportWaitMs: number;
+    prefilter: {
+      minOriginalLength: number;
+      minTranslationLength: number;
+      requireWordChar: boolean;
+      skipPunctuationOnly: boolean;
+    };
+  };
+  prompts: {
+    system: string;
+    userTemplate: string;
+  };
+  rules: readonly ReviewRuleConfig[];
+};
+
 export const APP_CONFIG = {
   openai: {
     model: "gpt-5.4-mini",
@@ -5,6 +36,7 @@ export const APP_CONFIG = {
   review: {
     rulesVersion: "v1",
     batchSize: 50,
+    concurrency: 1,
     exportRetries: 5,
     exportWaitMs: 3000,
     prefilter: {
@@ -42,6 +74,9 @@ export const APP_CONFIG = {
 【术语表】
 {{TERMS_JSON}}
 
+- 术语是否适用需要结合 note 判断
+- 只有 note 和当前词条都支持时，才按术语表判定
+
 【输出格式】
 - 输出必须是 JSON 对象
 - 顶层字段固定为 issues
@@ -58,39 +93,38 @@ export const APP_CONFIG = {
   rules: [
     {
       id: "R1",
-      desc: "译文有明显输入错误，如错别字、漏字、多字或误输入字符",
-      severity: "error",
+      criteria: "译文有明显输入错误，如错别字、漏字、多字或误输入字符",
+      report: "命中时只报告明确的输入错误，reason 简短指出错误点即可",
       category: "typo",
     },
     {
       id: "R2",
-      desc: "译文存在明显叠字或重复片段",
-      severity: "error",
+      criteria: "译文存在明显叠字或重复片段",
+      report: "命中时只报告重复片段本身，reason 可直接写重复内容或重复类型",
       category: "duplicate_text",
     },
     {
       id: "R3",
-      desc: "译文明显不符合术语表",
-      severity: "error",
+      criteria: "译文明显不符合术语表",
+      report: "命中时优先在 reason 中指出对应术语或术语不符点",
       category: "term_mismatch",
     },
     {
       id: "R4",
-      desc: "整句话未翻译，或译文出现整句原文中不存在的内容",
-      severity: "error",
+      criteria: "整句话未翻译，或译文中出现与原文毫无关系的内容；对原文的合理补充不包含在内",
+      report: "命中时明确说明是整句漏译，还是出现了与原文毫无关系的内容",
       category: "source_target_mismatch",
     },
-    {
-      id: "R5",
-      desc: "存在其他严重问题",
-      severity: "error",
-      category: "other",
-    },
+    // {
+    //   id: "R5",
+    //   criteria: "存在导致意思完全错误的非常严重问题，不包括其他小问题",
+    //   report: "命中时仅报告会导致整体意思完全错误的严重问题，reason 说明错误核心",
+    //   category: "other",
+    // },
   ],
-} as const;
+} as const satisfies AppConfigShape;
 
 export type AppConfig = typeof APP_CONFIG;
 export type ReviewRule = (typeof APP_CONFIG.rules)[number];
 export type RuleId = ReviewRule["id"];
-export type Severity = ReviewRule["severity"];
 export type Category = ReviewRule["category"];
