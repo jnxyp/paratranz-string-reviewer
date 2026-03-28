@@ -6,6 +6,7 @@
   },
   "review": {
     "rulesVersion": "v2",
+    "allowedStages": [1],
     "batchSize": 100,
     "batchMaxChars": 25000,
     "batchMaxRetries": 2,

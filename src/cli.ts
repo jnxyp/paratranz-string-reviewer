@@ -6,6 +6,7 @@ import { ParatranzClient } from "./clients/paratranz.js";
 import {
   getDefaultConfigPath,
   loadAppConfig,
+  setAppConfig,
   type AppConfig,
 } from "./config/config.js";
 import { loadEnv } from "./config/env.js";
@@ -46,9 +47,11 @@ program
   .option("--model <name>", "Override OpenAI model")
   .option("--batch-size <number>", "Override batch size")
   .option("--concurrency <number>", "Override review concurrency")
+  .option("--stages <list>", "Override allowed stages, comma-separated")
   .option("--no-cache", "Ignore cache for this run")
   .action(async (options) => {
     const config = applyRunOverrides(resolveConfig(options), options);
+    setAppConfig(config);
     const projectId = config.projectId;
     const batchSize = config.review.batchSize;
     const batchMaxChars = config.review.batchMaxChars;
@@ -89,7 +92,11 @@ program
     }
     const candidateStats = analyzeReviewCandidates(parsedStrings);
     console.log(`Parsed strings: ${parsedStrings.length}`);
-    console.log(`Stage 1 strings: ${parsedStrings.length - candidateStats.skippedStageNotTranslated}`);
+    console.log(
+      `Allowed stage strings (${config.review.allowedStages.join(", ")}): ${
+        parsedStrings.length - candidateStats.skippedStageNotTranslated
+      }`,
+    );
     console.log(`Skipped non-translated: ${candidateStats.skippedStageNotTranslated}`);
     console.log(`Skipped empty translation: ${candidateStats.skippedEmptyTranslation}`);
     console.log(`Skipped short original: ${candidateStats.skippedShortOriginal}`);
@@ -224,6 +231,7 @@ program
   .option("--project <id>", "Override project id")
   .action(async (options) => {
     const config = applyProjectOverride(resolveConfig(options), options.project);
+    setAppConfig(config);
     const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const artifact = await downloadAndExtractArtifact({
@@ -244,6 +252,7 @@ program
   .option("--project <id>", "Override project id")
   .action(async (options) => {
     const config = applyProjectOverride(resolveConfig(options), options.project);
+    setAppConfig(config);
     const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const result = await fetchAndSaveTerms({
@@ -262,6 +271,7 @@ program
   .option("--project <id>", "Override project id")
   .action((options) => {
     const config = applyProjectOverride(resolveConfig(options), options.project);
+    setAppConfig(config);
     const cachePath = getCachePath(dataDir, config.projectId);
     const cache = new CacheStore(cachePath);
     try {
@@ -300,6 +310,7 @@ function applyRunOverrides(
     model?: string;
     batchSize?: string;
     concurrency?: string;
+    stages?: string;
     cache?: boolean;
   },
 ): AppConfig {
@@ -319,6 +330,19 @@ function applyRunOverrides(
 
   if (options.concurrency) {
     next.review.concurrency = Number.parseInt(options.concurrency, 10);
+  }
+
+  if (options.stages) {
+    const allowedStages = options.stages
+      .split(",")
+      .map((value) => Number.parseInt(value.trim(), 10))
+      .filter((value) => Number.isInteger(value) && value >= 0);
+
+    if (allowedStages.length === 0) {
+      throw new Error("The --stages option must include at least one non-negative integer.");
+    }
+
+    next.review.allowedStages = allowedStages;
   }
 
   if (options.cache === false) {

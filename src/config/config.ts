@@ -16,6 +16,7 @@ const appConfigSchema = z.object({
   }),
   review: z.object({
     rulesVersion: z.string(),
+    allowedStages: z.array(z.number().int().nonnegative()),
     batchSize: z.number().int().positive(),
     batchMaxChars: z.number().int().positive(),
     batchMaxRetries: z.number().int().nonnegative(),

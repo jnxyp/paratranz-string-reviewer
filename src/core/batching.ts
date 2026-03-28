@@ -162,11 +162,12 @@ function getSkipReason(item: ParsedString):
   | "no_chinese_in_translation"
   | "punctuation_only"
   | null {
-  const prefilter = getAppConfig().review.prefilter;
+  const { review } = getAppConfig();
+  const prefilter = review.prefilter;
   const original = item.original.trim();
   const translation = item.translation.trim();
 
-  if (item.stage !== 1) {
+  if (item.stage === null || !review.allowedStages.includes(item.stage)) {
     return "stage_not_translated";
   }
 
