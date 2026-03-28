@@ -11,7 +11,7 @@
     "batchMaxRetries": 2,
     "maxStrings": null,
     "force": false,
-    "concurrency": 3,
+    "concurrency": 10,
     "exportRetries": 5,
     "exportWaitMs": 3000,
     "prefilter": {
