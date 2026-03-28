@@ -1,5 +1,9 @@
 # Paratranz String Reviewer
 
+> Warning
+> 本项目由 LLM vibe coding 生成，代码未经严格审查，请在使用时仔细检查和测试。
+> 编码使用模型：OpenAI GPT 5.4
+
 一个用于审阅 Paratranz 项目翻译词条的小工具。
 
 主流程是：
