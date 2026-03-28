@@ -5,8 +5,9 @@
     "reasoningEffort": "low"
   },
   "review": {
-    "rulesVersion": "v1",
+    "rulesVersion": "v2",
     "batchSize": 100,
+    "batchMaxChars": 25000,
     "batchMaxRetries": 2,
     "maxStrings": null,
     "force": false,
@@ -17,36 +18,37 @@
       "minOriginalLength": 10,
       "minTranslationLength": 10,
       "requireWordChar": true,
+      "requireChineseInTranslation": true,
       "skipPunctuationOnly": true
     }
   },
   "prompts": {
-    "system": "你是一个中文翻译审核助手。\n\n输入包含：\n- 审核规则\n- 术语表\n- 一批翻译词条\n\n你的任务是找出有问题的词条，并按规则 ID 返回命中结果。\n\n重要约束：\n- 只检查译文问题，不检查原文问题\n- 不要纠正原文中的错别字、命名或设定\n- 只有当这些问题实际出现在译文里时，才能报错\n\n输出要求：\n- 只输出有问题的词条\n- 输出合法 JSON\n- 输出字段尽量短",
-    "userTemplate": "请审核下面这批翻译词条。\n\n【任务】\n- 只输出有问题的词条\n- 输入中的 key 是短编号，仅用于定位\n- 词条已经按 key 排序\n- 按规则 ID 返回命中结果\n- 只检查译文问题，不要因为原文本身的问题报错\n\n【规则】\n{{RULES_JSON}}\n\n【术语表】\n{{TERMS_JSON}}\n\n- 术语是否适用需要结合 note 判断\n- 只有 note 和当前词条都支持时，才按术语表判定\n\n【输出格式】\n- 输出必须是 JSON 对象\n- 顶层字段固定为 issues\n- 如果没有问题，返回 {\"issues\":[]}\n- 每个 issue 只包含 key 和 hits\n- hits 是对象数组\n- 每个 hit 包含 rid\n- 每个 hit 可选包含 reason\n- reason 尽量简短\n\n【词条】\n{{STRINGS_JSON}}"
+    "system": "你是一个中文翻译审核专家。\n\n输入包含：\n- 审核规则\n- 术语表\n- 一批翻译词条\n\n你的任务是找出有问题的词条，并按规则 ID 返回命中结果。\n\n重要约束：\n- 只检查译文问题，不检查原文问题\n- 不要纠正原文中的错别字、命名或设定\n- 只有当这些问题实际出现在译文里时，才能报错\n- 只输出你非常有信心的错误结果\n- 如果不够确定，就不要输出\n\n输出要求：\n- 只输出有问题的词条\n- 输出合法 JSON\n- 输出字段尽量短",
+    "userTemplate": "请审核下面这批翻译词条。\n\n【任务】\n- 只输出你非常有信心的错误词条\n- 如果不够确定，就不要输出\n- 输入中的 key 是短编号，仅用于定位\n- 词条已经按 key 排序\n- 按规则 ID 返回命中结果\n- 只检查译文问题，不要因为原文本身的问题报错\n\n【规则】\n{{RULES_JSON}}\n\n【术语表】\n{{TERMS_JSON}}\n\n- 术语是否适用需要结合 note 判断\n- 只有 note 和当前词条都支持时，才按术语表判定\n\n【输出格式】\n- 输出必须是 JSON 对象\n- 顶层字段固定为 issues\n- 如果没有你非常有信心的问题，返回 {\"issues\":[]}\n- 每个 issue 只包含 key 和 hits\n- hits 是对象数组\n- 每个 hit 包含 rid\n- 每个 hit 可选包含 reason\n- reason 需要详细完整地说明错误原因，明确指出原文、译文和问题点的对应关系\n\n【词条】\n{{STRINGS_JSON}}"
   },
   "rules": [
     {
       "id": "R1",
-      "criteria": "译文有明显输入错误，如错别字、漏字、多字或误输入字符",
-      "report": "命中时只报告明确的输入错误，reason 简短指出错误点即可",
+      "criteria": "译文有明显输入错误，如错别字、漏字、多字或误输入字符。花括号 {} 不算错误，不需要对称，可随意插入，相当于空格。",
+      "report": "命中时只报告明确的输入错误。花括号 {} 本身不算问题，不需要对称，可随意插入，相当于空格。reason 需要详细完整说明具体错误点",
       "category": "typo"
     },
     {
       "id": "R2",
       "criteria": "译文存在明显叠字或重复片段",
-      "report": "命中时只报告重复片段本身，reason 可直接写重复内容或重复类型",
+      "report": "命中时需要详细完整说明重复了什么内容，以及为什么可以判断为误重复",
       "category": "duplicate_text"
     },
     {
       "id": "R3",
       "criteria": "译文明显不符合术语表",
-      "report": "命中时优先在 reason 中指出对应术语或术语不符点",
+      "report": "命中时需要详细完整说明对应术语、术语表要求、当前译文写法，以及为什么这里适用该术语",
       "category": "term_mismatch"
     },
     {
       "id": "R4",
-      "criteria": "整句话未翻译，或译文中出现与原文毫无关系的内容；对原文的合理补充不包含在内",
-      "report": "命中时明确说明是整句漏译，还是出现了与原文毫无关系的内容",
+      "criteria": "整句话未翻译，或译文中出现与原文毫无关系的内容；对原文的合理补充不包含在内。人名地名不翻译不算问题。",
+      "report": "命中时需要详细完整说明是整句漏译，还是出现了与原文毫无关系的内容，并指出对应的原文和译文片段。不要因为人名地名未翻译而报错",
       "category": "source_target_mismatch"
     }
   ]

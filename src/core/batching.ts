@@ -24,6 +24,7 @@ export interface ReviewCandidateStats {
   skippedShortOriginal: number;
   skippedShortTranslation: number;
   skippedNoWordChars: number;
+  skippedNoChineseInTranslation: number;
   skippedPunctuationOnly: number;
   candidateCount: number;
 }
@@ -48,6 +49,7 @@ export function analyzeReviewCandidates(strings: ParsedString[]): ReviewCandidat
     skippedShortOriginal: 0,
     skippedShortTranslation: 0,
     skippedNoWordChars: 0,
+    skippedNoChineseInTranslation: 0,
     skippedPunctuationOnly: 0,
     candidateCount: 0,
   };
@@ -76,6 +78,9 @@ export function analyzeReviewCandidates(strings: ParsedString[]): ReviewCandidat
       case "no_word_chars":
         stats.skippedNoWordChars += 1;
         break;
+      case "no_chinese_in_translation":
+        stats.skippedNoChineseInTranslation += 1;
+        break;
       case "punctuation_only":
         stats.skippedPunctuationOnly += 1;
         break;
@@ -85,26 +90,52 @@ export function analyzeReviewCandidates(strings: ParsedString[]): ReviewCandidat
   return stats;
 }
 
-export function buildBatches(candidates: ReviewCandidate[], batchSize: number): ReviewBatch[] {
+export function buildBatches(
+  candidates: ReviewCandidate[],
+  batchSize: number,
+  batchMaxChars: number,
+): ReviewBatch[] {
   const batches: ReviewBatch[] = [];
 
-  for (let index = 0; index < candidates.length; index += batchSize) {
-    const slice = candidates.slice(index, index + batchSize);
-    const mappings: Record<string, ReviewCandidate> = {};
-    const strings = slice.map((item, itemIndex) => {
-      const shortKey = String(itemIndex + 1);
-      mappings[shortKey] = item;
-      return {
-        key: shortKey,
-        o: item.original,
-        t: item.translation,
-      };
-    });
+  let currentBatch: ReviewCandidate[] = [];
+  let currentChars = 0;
 
-    batches.push({ mappings, strings });
+  for (const candidate of candidates) {
+    const candidateChars = candidate.original.length + candidate.translation.length;
+    const wouldExceedSize = currentBatch.length >= batchSize;
+    const wouldExceedChars =
+      currentBatch.length > 0 && currentChars + candidateChars > batchMaxChars;
+
+    if (wouldExceedSize || wouldExceedChars) {
+      batches.push(buildBatch(currentBatch));
+      currentBatch = [];
+      currentChars = 0;
+    }
+
+    currentBatch.push(candidate);
+    currentChars += candidateChars;
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(buildBatch(currentBatch));
   }
 
   return batches;
+}
+
+function buildBatch(candidates: ReviewCandidate[]): ReviewBatch {
+  const mappings: Record<string, ReviewCandidate> = {};
+  const strings = candidates.map((item, itemIndex) => {
+    const shortKey = String(itemIndex + 1);
+    mappings[shortKey] = item;
+    return {
+      key: shortKey,
+      o: item.original,
+      t: item.translation,
+    };
+  });
+
+  return { mappings, strings };
 }
 
 export function limitCandidates(
@@ -128,6 +159,7 @@ function getSkipReason(item: ParsedString):
   | "short_original"
   | "short_translation"
   | "no_word_chars"
+  | "no_chinese_in_translation"
   | "punctuation_only"
   | null {
   const prefilter = getAppConfig().review.prefilter;
@@ -154,6 +186,10 @@ function getSkipReason(item: ParsedString):
     return "no_word_chars";
   }
 
+  if (prefilter.requireChineseInTranslation && !containsChineseChar(translation)) {
+    return "no_chinese_in_translation";
+  }
+
   if (
     prefilter.skipPunctuationOnly &&
     (isPunctuationOnly(original) || isPunctuationOnly(translation))
@@ -171,4 +207,8 @@ function containsWordChar(value: string): boolean {
 function isPunctuationOnly(value: string): boolean {
   const trimmed = value.trim();
   return trimmed.length > 0 && !/[\p{L}\p{N}_]/u.test(trimmed);
+}
+
+function containsChineseChar(value: string): boolean {
+  return /\p{Script=Han}/u.test(value);
 }

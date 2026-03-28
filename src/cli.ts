@@ -51,6 +51,7 @@ program
     const config = applyRunOverrides(resolveConfig(options), options);
     const projectId = config.projectId;
     const batchSize = config.review.batchSize;
+    const batchMaxChars = config.review.batchMaxChars;
     const maxStrings = config.review.maxStrings ?? undefined;
 
     if (!env.OPENAI_API_KEY) {
@@ -94,6 +95,9 @@ program
     console.log(`Skipped short original: ${candidateStats.skippedShortOriginal}`);
     console.log(`Skipped short translation: ${candidateStats.skippedShortTranslation}`);
     console.log(`Skipped no word chars: ${candidateStats.skippedNoWordChars}`);
+    console.log(
+      `Skipped no Chinese in translation: ${candidateStats.skippedNoChineseInTranslation}`,
+    );
     console.log(`Skipped punctuation only: ${candidateStats.skippedPunctuationOnly}`);
     console.log(`Candidates after prefilter: ${candidateStats.candidateCount}`);
 
@@ -130,7 +134,7 @@ program
       };
 
       if (pendingCandidates.length > 0) {
-        const batches = buildBatches(pendingCandidates, batchSize);
+        const batches = buildBatches(pendingCandidates, batchSize, batchMaxChars);
         console.log(
           `Reviewing ${pendingCandidates.length} new strings in ${batches.length} batches...`,
         );

@@ -18,6 +18,7 @@ const appConfigSchema = z.object({
   review: z.object({
     rulesVersion: z.string(),
     batchSize: z.number().int().positive(),
+    batchMaxChars: z.number().int().positive(),
     batchMaxRetries: z.number().int().nonnegative(),
     maxStrings: z.number().int().positive().nullable(),
     force: z.boolean(),
@@ -28,6 +29,7 @@ const appConfigSchema = z.object({
       minOriginalLength: z.number().int().nonnegative(),
       minTranslationLength: z.number().int().nonnegative(),
       requireWordChar: z.boolean(),
+      requireChineseInTranslation: z.boolean(),
       skipPunctuationOnly: z.boolean(),
     }),
   }),
