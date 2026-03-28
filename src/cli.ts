@@ -9,14 +9,13 @@ import {
   type AppConfig,
 } from "./config/config.js";
 import { loadEnv } from "./config/env.js";
-import { getRulesVersion } from "./config/rules.js";
 import {
+  analyzeReviewCandidates,
   buildBatches,
   buildReviewCandidates,
   limitCandidates,
-  splitCandidatesByCache,
 } from "./core/batching.js";
-import { getCachePath, loadCache, saveCache, type CacheFile } from "./core/cache.js";
+import { CacheStore, getCachePath } from "./core/cache.js";
 import { downloadAndExtractArtifact } from "./core/export.js";
 import { parseExtractedStrings } from "./core/parse.js";
 import { buildProjectResult, saveProjectResult } from "./core/result.js";
@@ -43,8 +42,13 @@ program
   .command("run")
   .option("--config <path>", "Path to config JSON")
   .option("--config-json <json>", "Inline config JSON")
+  .option("--project <id>", "Override project id")
+  .option("--model <name>", "Override OpenAI model")
+  .option("--batch-size <number>", "Override batch size")
+  .option("--concurrency <number>", "Override review concurrency")
+  .option("--no-cache", "Ignore cache for this run")
   .action(async (options) => {
-    const config = resolveConfig(options);
+    const config = applyRunOverrides(resolveConfig(options), options);
     const projectId = config.projectId;
     const batchSize = config.review.batchSize;
     const maxStrings = config.review.maxStrings ?? undefined;
@@ -57,6 +61,7 @@ program
     const openai = new OpenAIReviewClient({
       apiKey: env.OPENAI_API_KEY,
       model: config.openai.model,
+      reasoningEffort: config.openai.reasoningEffort,
     });
 
     console.log(`Project: ${projectId}`);
@@ -81,108 +86,127 @@ program
     if (parsedStrings.length === 0) {
       throw new Error("No reviewable strings were parsed from the artifact.");
     }
+    const candidateStats = analyzeReviewCandidates(parsedStrings);
+    console.log(`Parsed strings: ${parsedStrings.length}`);
+    console.log(`Stage 1 strings: ${parsedStrings.length - candidateStats.skippedStageNotTranslated}`);
+    console.log(`Skipped non-translated: ${candidateStats.skippedStageNotTranslated}`);
+    console.log(`Skipped empty translation: ${candidateStats.skippedEmptyTranslation}`);
+    console.log(`Skipped short original: ${candidateStats.skippedShortOriginal}`);
+    console.log(`Skipped short translation: ${candidateStats.skippedShortTranslation}`);
+    console.log(`Skipped no word chars: ${candidateStats.skippedNoWordChars}`);
+    console.log(`Skipped punctuation only: ${candidateStats.skippedPunctuationOnly}`);
+    console.log(`Candidates after prefilter: ${candidateStats.candidateCount}`);
 
     const cachePath = getCachePath(dataDir, projectId);
-    const cache = loadCache(cachePath);
-    const candidates = buildReviewCandidates({
-      strings: parsedStrings,
-    });
-    const limitedCandidates = limitCandidates(candidates, maxStrings);
-    const { cachedCandidates, pendingCandidates } = splitCandidatesByCache({
-      candidates: limitedCandidates,
-      cache,
-      force: config.review.force,
-    });
-    const cachedIssues = getCachedIssues({
-      cache,
-      candidates: cachedCandidates,
-    });
-
-    if (limitedCandidates.length === 0) {
-      console.log("No reviewable strings after prefilter.");
-      console.log(`Terms saved to ${termsPath}`);
-      return;
-    }
-
-    let reviewRun: ReviewRunResult = {
-      issues: [] as ReviewedIssue[],
-      usage: {
-        inputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-      },
-      model: config.openai.model,
-    };
-
-    if (pendingCandidates.length > 0) {
-      const batches = buildBatches(pendingCandidates, batchSize);
-      console.log(
-        `Reviewing ${pendingCandidates.length} new strings in ${batches.length} batches...`,
-      );
-      reviewRun = await reviewBatches({
-        client: openai,
-        batches,
-        terms,
-        concurrency: config.review.concurrency,
+    const cache = new CacheStore(cachePath);
+    try {
+      const candidates = buildReviewCandidates({
+        strings: parsedStrings,
       });
-    } else {
-      console.log("No new strings to review. Using cached results only.");
-    }
+      const limitedCandidates = limitCandidates(candidates, maxStrings);
+      const { cachedCandidates, pendingCandidates } = cache.splitCandidates(
+        limitedCandidates,
+        config.review.force,
+      );
+      console.log(`Candidates after maxStrings: ${limitedCandidates.length}`);
+      console.log(`Cached candidates: ${cachedCandidates.length}`);
+      console.log(`Pending candidates: ${pendingCandidates.length}`);
+      const cachedIssues = cache.getCachedIssues(cachedCandidates);
 
-    const allIssues = [...cachedIssues, ...reviewRun.issues].sort((a, b) =>
-      a.key.localeCompare(b.key, "en"),
-    );
+      if (limitedCandidates.length === 0) {
+        console.log("No reviewable strings after prefilter.");
+        console.log(`Terms saved to ${termsPath}`);
+        return;
+      }
 
-    const result = buildProjectResult({
-      projectId,
-      model: reviewRun.model,
-      totalStringCount: limitedCandidates.length,
-      cachedStringCount: cachedCandidates.length,
-      reviewedStringCount: pendingCandidates.length,
-      usage: reviewRun.usage,
-      issues: allIssues,
-    });
-    const resultPath = saveProjectResult({
-      dataDir,
-      projectId,
-      result,
-    });
-
-    const now = new Date().toISOString();
-    const issuesByKey = new Map(reviewRun.issues.map((issue) => [issue.key, issue]));
-    for (const candidate of pendingCandidates) {
-      const issue = issuesByKey.get(candidate.key) ?? null;
-      cache.items[candidate.hash] = {
-        key: candidate.key,
-        reviewedAt: now,
-        issue,
+      let reviewRun: ReviewRunResult = {
+        issues: [] as ReviewedIssue[],
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+        },
+        model: config.openai.model,
       };
-    }
-    cache.rulesVersion = getRulesVersion();
-    saveCache(cachePath, cache);
 
-    console.log(`Artifact: ${artifact.artifactPath}`);
-    console.log(`Terms: ${termsPath}`);
-    console.log(`Result: ${resultPath}`);
-    console.log(`Model: ${reviewRun.model}`);
-    console.log(`Input tokens: ${reviewRun.usage.inputTokens}`);
-    console.log(`Output tokens: ${reviewRun.usage.outputTokens}`);
-    console.log(`Total tokens: ${reviewRun.usage.totalTokens}`);
-    console.log(`Total strings: ${result.stats.totalStringCount}`);
-    console.log(`Cached strings: ${result.stats.cachedStringCount}`);
-    console.log(`Reviewed strings: ${result.stats.reviewedStringCount}`);
-    console.log(`Issue strings: ${result.stats.issueStringCount}`);
-    console.log(`Issue count: ${result.stats.issueCount}`);
-    console.log(`Cached issue count: ${result.stats.cachedIssueCount}`);
-    console.log(`New issue count: ${result.stats.newIssueCount}`);
+      if (pendingCandidates.length > 0) {
+        const batches = buildBatches(pendingCandidates, batchSize);
+        console.log(
+          `Reviewing ${pendingCandidates.length} new strings in ${batches.length} batches...`,
+        );
+        reviewRun = await reviewBatches({
+          client: openai,
+          batches,
+          terms,
+          concurrency: config.review.concurrency,
+          maxBatchRetries: config.review.batchMaxRetries,
+          onBatchComplete: (batchResult) => {
+            if (batchResult.skipped) {
+              return;
+            }
+            cache.upsertReviewedBatch({
+              candidates: batchResult.candidates,
+              issues: batchResult.issues,
+              reviewedAt: new Date().toISOString(),
+            });
+          },
+          onProgress: (progress) => {
+            console.log(
+              `Progress: batches ${progress.completedBatches}/${progress.totalBatches}, strings ${progress.completedStrings}/${progress.totalStrings}, issues ${progress.issueCount}, skipped batches ${progress.skippedBatches}, input toks ${progress.inputTokens}, output toks ${progress.outputTokens}`,
+            );
+          },
+        });
+      } else {
+        console.log("No new strings to review. Using cached results only.");
+      }
+
+      const allIssues = [...cachedIssues, ...reviewRun.issues].sort((a, b) =>
+        a.key.localeCompare(b.key, "en"),
+      );
+
+      const result = buildProjectResult({
+        projectId,
+        model: reviewRun.model,
+        reasoningEffort: config.openai.reasoningEffort,
+        totalStringCount: limitedCandidates.length,
+        cachedStringCount: cachedCandidates.length,
+        reviewedStringCount: pendingCandidates.length,
+        usage: reviewRun.usage,
+        issues: allIssues,
+      });
+      const resultPath = saveProjectResult({
+        dataDir,
+        projectId,
+        result,
+      });
+
+      console.log(`Artifact: ${artifact.artifactPath}`);
+      console.log(`Terms: ${termsPath}`);
+      console.log(`Result: ${resultPath}`);
+      console.log(`Model: ${reviewRun.model}`);
+      console.log(`Reasoning effort: ${config.openai.reasoningEffort}`);
+      console.log(`Input tokens: ${reviewRun.usage.inputTokens}`);
+      console.log(`Output tokens: ${reviewRun.usage.outputTokens}`);
+      console.log(`Total tokens: ${reviewRun.usage.totalTokens}`);
+      console.log(`Total strings: ${result.stats.totalStringCount}`);
+      console.log(`Cached strings: ${result.stats.cachedStringCount}`);
+      console.log(`Reviewed strings: ${result.stats.reviewedStringCount}`);
+      console.log(`Issue strings: ${result.stats.issueStringCount}`);
+      console.log(`Issue count: ${result.stats.issueCount}`);
+      console.log(`Cached issue count: ${result.stats.cachedIssueCount}`);
+      console.log(`New issue count: ${result.stats.newIssueCount}`);
+    } finally {
+      cache.close();
+    }
   });
 
 program
   .command("export")
   .option("--config <path>", "Path to config JSON")
   .option("--config-json <json>", "Inline config JSON")
+  .option("--project <id>", "Override project id")
   .action(async (options) => {
-    const config = resolveConfig(options);
+    const config = applyProjectOverride(resolveConfig(options), options.project);
     const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const artifact = await downloadAndExtractArtifact({
@@ -200,8 +224,9 @@ program
   .command("terms")
   .option("--config <path>", "Path to config JSON")
   .option("--config-json <json>", "Inline config JSON")
+  .option("--project <id>", "Override project id")
   .action(async (options) => {
-    const config = resolveConfig(options);
+    const config = applyProjectOverride(resolveConfig(options), options.project);
     const projectId = config.projectId;
     const paratranz = new ParatranzClient({ apiKey: env.PARATRANZ_API_KEY });
     const result = await fetchAndSaveTerms({
@@ -234,22 +259,47 @@ function resolveConfig(options: { config?: string; configJson?: string }): AppCo
   return config;
 }
 
-function getCachedIssues(input: {
-  cache: CacheFile;
-  candidates: Array<{ hash: string }>;
-}): ReviewedIssue[] {
-  const issues: ReviewedIssue[] = [];
+function applyRunOverrides(
+  config: AppConfig,
+  options: {
+    project?: string;
+    model?: string;
+    batchSize?: string;
+    concurrency?: string;
+    cache?: boolean;
+  },
+): AppConfig {
+  const next = structuredClone(config);
 
-  for (const candidate of input.candidates) {
-    const entry = input.cache.items[candidate.hash];
-    if (!entry?.issue) {
-      continue;
-    }
-    issues.push({
-      ...entry.issue,
-      fromCache: true,
-    });
+  if (options.project) {
+    next.projectId = Number.parseInt(options.project, 10);
   }
 
-  return issues;
+  if (options.model) {
+    next.openai.model = options.model;
+  }
+
+  if (options.batchSize) {
+    next.review.batchSize = Number.parseInt(options.batchSize, 10);
+  }
+
+  if (options.concurrency) {
+    next.review.concurrency = Number.parseInt(options.concurrency, 10);
+  }
+
+  if (options.cache === false) {
+    next.review.force = true;
+  }
+
+  return next;
+}
+
+function applyProjectOverride(config: AppConfig, project?: string): AppConfig {
+  if (!project) {
+    return config;
+  }
+
+  const next = structuredClone(config);
+  next.projectId = Number.parseInt(project, 10);
+  return next;
 }

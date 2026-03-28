@@ -30,6 +30,7 @@ function buildUserPrompt(input: {
 export interface OpenAIReviewClientOptions {
   apiKey: string;
   model: string;
+  reasoningEffort: "none" | "low" | "medium" | "high";
 }
 
 export interface ReviewUsage {
@@ -53,10 +54,12 @@ export interface ReviewBatchResult {
 export class OpenAIReviewClient {
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly reasoningEffort: OpenAIReviewClientOptions["reasoningEffort"];
 
   constructor(options: OpenAIReviewClientOptions) {
     this.client = new OpenAI({ apiKey: options.apiKey });
     this.model = options.model;
+    this.reasoningEffort = options.reasoningEffort;
   }
 
   async reviewBatch(input: {
@@ -68,6 +71,12 @@ export class OpenAIReviewClient {
       model: this.model,
       instructions: getAppConfig().prompts.system,
       input: buildUserPrompt(input),
+      reasoning:
+        this.reasoningEffort === "none"
+          ? undefined
+          : {
+              effort: this.reasoningEffort,
+            },
     });
 
     const raw = response.output_text.trim();
@@ -86,6 +95,10 @@ export class OpenAIReviewClient {
 
   static hitIds(): string[] {
     return getReviewRules().map((rule) => rule.id);
+  }
+
+  getModel(): string {
+    return this.model;
   }
 }
 

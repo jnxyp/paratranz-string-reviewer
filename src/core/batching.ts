@@ -1,4 +1,4 @@
-import { buildStringHash, type CacheFile } from "./cache.js";
+import { buildStringHash } from "./cache.js";
 import { getAppConfig } from "../config/config.js";
 import type { ParsedString } from "./parse.js";
 
@@ -17,6 +17,17 @@ export interface ReviewBatch {
   strings: ReviewBatchItem[];
 }
 
+export interface ReviewCandidateStats {
+  totalStrings: number;
+  skippedStageNotTranslated: number;
+  skippedEmptyTranslation: number;
+  skippedShortOriginal: number;
+  skippedShortTranslation: number;
+  skippedNoWordChars: number;
+  skippedPunctuationOnly: number;
+  candidateCount: number;
+}
+
 export function buildReviewCandidates(input: {
   strings: ParsedString[];
 }): ReviewCandidate[] {
@@ -29,36 +40,49 @@ export function buildReviewCandidates(input: {
     .sort((a, b) => a.key.localeCompare(b.key, "en"));
 }
 
-export function splitCandidatesByCache(input: {
-  candidates: ReviewCandidate[];
-  cache: CacheFile;
-  force?: boolean;
-}): {
-  cachedCandidates: ReviewCandidate[];
-  pendingCandidates: ReviewCandidate[];
-} {
-  if (input.force) {
-    return {
-      cachedCandidates: [],
-      pendingCandidates: input.candidates,
-    };
-  }
+export function analyzeReviewCandidates(strings: ParsedString[]): ReviewCandidateStats {
+  const stats: ReviewCandidateStats = {
+    totalStrings: 0,
+    skippedStageNotTranslated: 0,
+    skippedEmptyTranslation: 0,
+    skippedShortOriginal: 0,
+    skippedShortTranslation: 0,
+    skippedNoWordChars: 0,
+    skippedPunctuationOnly: 0,
+    candidateCount: 0,
+  };
 
-  const cachedCandidates: ReviewCandidate[] = [];
-  const pendingCandidates: ReviewCandidate[] = [];
-
-  for (const candidate of input.candidates) {
-    if (candidate.hash in input.cache.items) {
-      cachedCandidates.push(candidate);
+  for (const item of strings) {
+    stats.totalStrings += 1;
+    const skipReason = getSkipReason(item);
+    if (!skipReason) {
+      stats.candidateCount += 1;
       continue;
     }
-    pendingCandidates.push(candidate);
+
+    switch (skipReason) {
+      case "stage_not_translated":
+        stats.skippedStageNotTranslated += 1;
+        break;
+      case "empty_translation":
+        stats.skippedEmptyTranslation += 1;
+        break;
+      case "short_original":
+        stats.skippedShortOriginal += 1;
+        break;
+      case "short_translation":
+        stats.skippedShortTranslation += 1;
+        break;
+      case "no_word_chars":
+        stats.skippedNoWordChars += 1;
+        break;
+      case "punctuation_only":
+        stats.skippedPunctuationOnly += 1;
+        break;
+    }
   }
 
-  return {
-    cachedCandidates,
-    pendingCandidates,
-  };
+  return stats;
 }
 
 export function buildBatches(candidates: ReviewCandidate[], batchSize: number): ReviewBatch[] {
@@ -95,37 +119,49 @@ export function limitCandidates(
 }
 
 function shouldReview(item: ParsedString): boolean {
+  return getSkipReason(item) === null;
+}
+
+function getSkipReason(item: ParsedString):
+  | "stage_not_translated"
+  | "empty_translation"
+  | "short_original"
+  | "short_translation"
+  | "no_word_chars"
+  | "punctuation_only"
+  | null {
   const prefilter = getAppConfig().review.prefilter;
   const original = item.original.trim();
   const translation = item.translation.trim();
 
   if (item.stage !== 1) {
-    return false;
+    return "stage_not_translated";
   }
 
   if (!translation) {
-    return false;
+    return "empty_translation";
   }
 
-  if (
-    original.length < prefilter.minOriginalLength ||
-    translation.length < prefilter.minTranslationLength
-  ) {
-    return false;
+  if (original.length < prefilter.minOriginalLength) {
+    return "short_original";
+  }
+
+  if (translation.length < prefilter.minTranslationLength) {
+    return "short_translation";
   }
 
   if (prefilter.requireWordChar && !containsWordChar(original) && !containsWordChar(translation)) {
-    return false;
+    return "no_word_chars";
   }
 
   if (
     prefilter.skipPunctuationOnly &&
     (isPunctuationOnly(original) || isPunctuationOnly(translation))
   ) {
-    return false;
+    return "punctuation_only";
   }
 
-  return true;
+  return null;
 }
 
 function containsWordChar(value: string): boolean {

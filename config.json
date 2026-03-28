@@ -1,11 +1,13 @@
 {
   "projectId": 3489,
   "openai": {
-    "model": "gpt-5.4-mini"
+    "model": "gpt-5.4-mini",
+    "reasoningEffort": "low"
   },
   "review": {
     "rulesVersion": "v1",
     "batchSize": 50,
+    "batchMaxRetries": 2,
     "maxStrings": null,
     "force": false,
     "concurrency": 1,

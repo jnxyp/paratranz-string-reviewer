@@ -30,6 +30,7 @@ export interface ProjectResult {
   projectId: number;
   generatedAt: string;
   model: string;
+  reasoningEffort: string;
   rulesVersion: string;
   stats: {
     totalStringCount: number;
@@ -52,6 +53,7 @@ export interface ProjectResult {
 export function buildProjectResult(input: {
   projectId: number;
   model: string;
+  reasoningEffort: string;
   totalStringCount: number;
   cachedStringCount: number;
   reviewedStringCount: number;
@@ -69,6 +71,7 @@ export function buildProjectResult(input: {
     projectId: input.projectId,
     generatedAt: new Date().toISOString(),
     model: input.model,
+    reasoningEffort: input.reasoningEffort,
     rulesVersion: getRulesVersion(),
     stats: {
       totalStringCount: input.totalStringCount,

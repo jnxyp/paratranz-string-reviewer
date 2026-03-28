@@ -13,10 +13,12 @@ const appConfigSchema = z.object({
   projectId: z.number().int().positive(),
   openai: z.object({
     model: z.string(),
+    reasoningEffort: z.enum(["none", "low", "medium", "high"]).default("none"),
   }),
   review: z.object({
     rulesVersion: z.string(),
     batchSize: z.number().int().positive(),
+    batchMaxRetries: z.number().int().nonnegative(),
     maxStrings: z.number().int().positive().nullable(),
     force: z.boolean(),
     concurrency: z.number().int().positive(),
