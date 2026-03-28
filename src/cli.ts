@@ -190,7 +190,7 @@ program
         usage: reviewRun.usage,
         issues: allIssues,
       });
-      const resultPath = saveProjectResult({
+      const resultPaths = saveProjectResult({
         dataDir,
         projectId,
         result,
@@ -198,7 +198,8 @@ program
 
       console.log(`Artifact: ${artifact.artifactPath}`);
       console.log(`Terms: ${termsPath}`);
-      console.log(`Result: ${resultPath}`);
+      console.log(`Result JSON: ${resultPaths.jsonPath}`);
+      console.log(`Result HTML: ${resultPaths.htmlPath}`);
       console.log(`Model: ${reviewRun.model}`);
       console.log(`Reasoning effort: ${config.openai.reasoningEffort}`);
       console.log(`Input tokens: ${reviewRun.usage.inputTokens}`);

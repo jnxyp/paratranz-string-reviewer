@@ -6,7 +6,6 @@ const reviewRuleSchema = z.object({
   id: z.string(),
   criteria: z.string(),
   report: z.string(),
-  category: z.string(),
 });
 
 const appConfigSchema = z.object({
@@ -43,7 +42,6 @@ const appConfigSchema = z.object({
 export type AppConfig = z.infer<typeof appConfigSchema>;
 export type ReviewRule = AppConfig["rules"][number];
 export type RuleId = ReviewRule["id"];
-export type Category = ReviewRule["category"];
 
 export interface LoadAppConfigOptions {
   configJson?: string;

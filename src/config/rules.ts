@@ -1,6 +1,6 @@
-import { getAppConfig, type Category, type ReviewRule, type RuleId } from "./config.js";
+import { getAppConfig, type ReviewRule, type RuleId } from "./config.js";
 
-export type { Category, ReviewRule, RuleId } from "./config.js";
+export type { ReviewRule, RuleId } from "./config.js";
 
 export function getRulesVersion(): string {
   return getAppConfig().review.rulesVersion;
