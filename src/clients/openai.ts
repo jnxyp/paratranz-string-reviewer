@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
-import { APP_CONFIG } from "../config/app-config.js";
+import { APP_CONFIG } from "../config/config.js";
 import { REVIEW_RULES, type RuleId } from "../config/rules.js";
 
 const validRuleIds = new Set(REVIEW_RULES.map((rule) => rule.id));

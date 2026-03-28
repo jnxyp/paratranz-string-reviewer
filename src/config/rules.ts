@@ -1,5 +1,5 @@
-import { APP_CONFIG, type Category, type RuleId, type Severity } from "./app-config.js";
-export type { Category, RuleId, Severity } from "./app-config.js";
+import { APP_CONFIG, type Category, type RuleId, type Severity } from "./config.js";
+export type { Category, RuleId, Severity } from "./config.js";
 
 export interface ReviewRule {
   id: RuleId;
@@ -10,7 +10,7 @@ export interface ReviewRule {
 
 export const RULES_VERSION = APP_CONFIG.review.rulesVersion;
 
-export const REVIEW_RULES: ReviewRule[] = APP_CONFIG.rules;
+export const REVIEW_RULES: readonly ReviewRule[] = APP_CONFIG.rules;
 
 export const RULES_BY_ID = Object.fromEntries(
   REVIEW_RULES.map((rule) => [rule.id, rule]),

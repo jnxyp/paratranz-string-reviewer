@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { join } from "node:path";
 import { OpenAIReviewClient } from "./clients/openai.js";
 import { ParatranzClient } from "./clients/paratranz.js";
-import { APP_CONFIG } from "./config/app-config.js";
+import { APP_CONFIG } from "./config/config.js";
 import { loadEnv } from "./config/env.js";
 import { RULES_VERSION } from "./config/rules.js";
 import {

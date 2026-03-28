@@ -22,7 +22,7 @@
 - Node.js + TypeScript + pnpm
 - Paratranz API 拉取 artifact 和术语表
 - OpenAI Responses API 执行批量审核
-- 根目录 `config.json` 维护模型、规则、提示词和审核参数
+- `src/config/config.ts` 维护模型、规则、提示词和审核参数
 - 本地 `data/` 目录保存 artifact、解压结果、术语、缓存和结果文件
 
 已验证：
@@ -45,7 +45,7 @@ pnpm exec tsx src/cli.ts run --project 3489
 
 ## 文档
 
-- 运行时配置：[config.json](config.json)
+- 运行时配置：[src/config/config.ts](src/config/config.ts)
 - 审核规则、提示词与 I/O 规范：[docs/review-rules-and-prompts.md](docs/review-rules-and-prompts.md)
 - Paratranz OpenAPI 文档副本：[docs/paratranz-api.yml](docs/paratranz-api.yml)
 - 本地实现计划：[AGENTS.md](AGENTS.md)

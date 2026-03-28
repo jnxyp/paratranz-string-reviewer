@@ -1,5 +1,5 @@
 import { buildStringHash, type CacheFile } from "./cache.js";
-import { APP_CONFIG } from "../config/app-config.js";
+import { APP_CONFIG } from "../config/config.js";
 import type { ParsedString } from "./parse.js";
 
 export interface ReviewCandidate extends ParsedString {
