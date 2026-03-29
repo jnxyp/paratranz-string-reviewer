@@ -3,6 +3,8 @@ import { getAppConfig } from "../config/config.js";
 import type { ParsedString } from "./parse.js";
 
 export interface ReviewCandidate extends ParsedString {
+  normalizedOriginal: string;
+  normalizedTranslation: string;
   hash: string;
 }
 
@@ -34,10 +36,21 @@ export function buildReviewCandidates(input: {
 }): ReviewCandidate[] {
   return input.strings
     .filter((item) => shouldReview(item))
-    .map((item) => ({
-      ...item,
-      hash: buildStringHash(item),
-    }))
+    .map((item) => {
+      const normalizedOriginal = normalizeForReview(item.original);
+      const normalizedTranslation = normalizeForReview(item.translation);
+
+      return {
+        ...item,
+        normalizedOriginal,
+        normalizedTranslation,
+        hash: buildStringHash({
+          key: item.key,
+          original: normalizedOriginal,
+          translation: normalizedTranslation,
+        }),
+      };
+    })
     .sort((a, b) => a.key.localeCompare(b.key, "en"));
 }
 
@@ -101,7 +114,8 @@ export function buildBatches(
   let currentChars = 0;
 
   for (const candidate of candidates) {
-    const candidateChars = candidate.original.length + candidate.translation.length;
+    const candidateChars =
+      candidate.normalizedOriginal.length + candidate.normalizedTranslation.length;
     const wouldExceedSize = currentBatch.length >= batchSize;
     const wouldExceedChars =
       currentBatch.length > 0 && currentChars + candidateChars > batchMaxChars;
@@ -130,8 +144,8 @@ function buildBatch(candidates: ReviewCandidate[]): ReviewBatch {
     mappings[shortKey] = item;
     return {
       key: shortKey,
-      o: item.original,
-      t: item.translation,
+      o: item.normalizedOriginal,
+      t: item.normalizedTranslation,
     };
   });
 
@@ -164,8 +178,8 @@ function getSkipReason(item: ParsedString):
   | null {
   const { review } = getAppConfig();
   const prefilter = review.prefilter;
-  const original = item.original.trim();
-  const translation = item.translation.trim();
+  const original = normalizeForReview(item.original).trim();
+  const translation = normalizeForReview(item.translation).trim();
 
   if (item.stage === null || !review.allowedStages.includes(item.stage)) {
     return "stage_not_translated";
@@ -212,4 +226,17 @@ function isPunctuationOnly(value: string): boolean {
 
 function containsChineseChar(value: string): boolean {
   return /\p{Script=Han}/u.test(value);
+}
+
+function stripCurlyBraces(value: string): string {
+  return value.replace(/[{}｛｝]/g, "");
+}
+
+function normalizeForReview(value: string): string {
+  const { prefilter } = getAppConfig().review;
+  if (!prefilter.stripCurlyBraces) {
+    return value;
+  }
+
+  return stripCurlyBraces(value);
 }

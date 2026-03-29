@@ -28,6 +28,7 @@ const appConfigSchema = z.object({
     prefilter: z.object({
       minOriginalLength: z.number().int().nonnegative(),
       minTranslationLength: z.number().int().nonnegative(),
+      stripCurlyBraces: z.boolean(),
       requireWordChar: z.boolean(),
       requireChineseInTranslation: z.boolean(),
       skipPunctuationOnly: z.boolean(),

@@ -5,7 +5,7 @@
     "reasoningEffort": "low"
   },
   "review": {
-    "rulesVersion": "v2",
+    "rulesVersion": "v6",
     "allowedStages": [1],
     "batchSize": 100,
     "batchMaxChars": 25000,
@@ -18,6 +18,7 @@
     "prefilter": {
       "minOriginalLength": 10,
       "minTranslationLength": 10,
+      "stripCurlyBraces": true,
       "requireWordChar": true,
       "requireChineseInTranslation": true,
       "skipPunctuationOnly": true
@@ -30,8 +31,8 @@
   "rules": [
     {
       "id": "R1",
-      "criteria": "译文有明显输入错误，如错别字、漏字、多字或误输入字符。花括号 {} 不算错误，不需要对称，可随意插入，相当于空格。原文是 {{内容}}、译文是 {{内容}}} 这种多一个花括号的情况也不算错误。",
-      "report": "命中时只报告明确的输入错误。花括号 {} 本身不算问题，不需要对称，可随意插入，相当于空格。原文是 {{内容}}、译文是 {{内容}}} 这种多一个花括号的情况也不算错误。reason 需要详细完整说明具体错误点"
+      "criteria": "译文有明显输入错误，如错别字、漏字、多字或误输入字符。",
+      "report": "命中时只报告明确的输入错误。reason 需要详细完整说明具体错误点"
     },
     {
       "id": "R2",
