@@ -385,19 +385,6 @@ function renderProjectResultHtml(result: ProjectResult): string {
       cursor: pointer;
       font: inherit;
     }
-    .link-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 9px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(0, 123, 255, 0.22);
-      background: var(--accent-soft);
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 600;
-    }
     .issues {
       display: flex;
       flex-direction: column;
@@ -415,9 +402,16 @@ function renderProjectResultHtml(result: ProjectResult): string {
       margin-bottom: 12px;
     }
     .issue-key {
+      display: inline-block;
       font-size: 18px;
       line-height: 1.35;
       word-break: break-all;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .issue-key:hover {
+      text-decoration: underline;
     }
     .issue-badges {
       display: flex;
@@ -482,10 +476,16 @@ function renderProjectResultHtml(result: ProjectResult): string {
       padding: 12px;
       background: rgba(255,255,255,0.55);
     }
-    .hit strong { display: block; margin-bottom: 6px; }
     .hit p {
-      color: var(--muted);
+      color: var(--text);
       line-height: 1.55;
+      margin: 0;
+    }
+    .hit-rule {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
     }
     .empty {
       border: 1px dashed var(--line);
@@ -600,6 +600,12 @@ function renderProjectResultHtml(result: ProjectResult): string {
     ];
     const pageSize = 20;
     let currentPage = 1;
+    const ruleNameById = {
+      R1: "明显输入错误",
+      R2: "叠字或重复片段",
+      R3: "不符合术语表",
+      R4: "原文与译文明显不对应",
+    };
 
     function escapeHtml(value) {
       return value
@@ -608,6 +614,10 @@ function renderProjectResultHtml(result: ProjectResult): string {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+    }
+
+    function getRuleDisplayName(hit) {
+      return ruleNameById[hit.rid] || hit.rule.criteria;
     }
 
     function renderRuleFilters() {
@@ -687,20 +697,17 @@ function renderProjectResultHtml(result: ProjectResult): string {
           .join("");
           const cacheBadge = issue.fromCache ? '<span class="badge cache">来自缓存</span>' : "";
         const hitsHtml = issue.hits.map((hit) => {
-          const reason = hit.reason
-            ? '<p>' + escapeHtml(hit.reason) + '</p>'
-            : '<p>没有附加说明。</p>';
+          const explanation = hit.reason || "没有附加说明。";
           return '<div class="hit">' +
-            '<strong>' + escapeHtml(hit.rid) + ' · ' + escapeHtml(hit.rule.criteria) + '</strong>' +
-            reason +
+            '<p>' + escapeHtml(explanation) + '</p>' +
+            '<div class="hit-rule">' + escapeHtml(hit.rid) + ' · ' + escapeHtml(getRuleDisplayName(hit)) + '</div>' +
           '</div>';
         }).join("");
 
         return '<article class="issue">' +
           '<div class="issue-head">' +
             '<div>' +
-              '<div class="issue-key">' + escapeHtml(issue.key) + '</div>' +
-              '<a class="link-button" href="' + escapeHtml(issue.stringUrl) + '" target="_blank" rel="noreferrer">打开词条</a>' +
+              '<a class="issue-key" href="' + escapeHtml(issue.stringUrl) + '" target="_blank" rel="noreferrer">' + escapeHtml(issue.key) + '</a>' +
             '</div>' +
             '<div class="issue-badges">' + cacheBadge + badges + '</div>' +
           '</div>' +
@@ -708,14 +715,13 @@ function renderProjectResultHtml(result: ProjectResult): string {
             '<div class="block"><h3>原文</h3><pre>' + escapeHtml(issue.original) + '</pre></div>' +
             '<div class="block"><h3>译文</h3><pre>' + escapeHtml(issue.translation) + '</pre></div>' +
           '</div>' +
-          '<div class="block"><h3>文件</h3><pre>' + escapeHtml(issue.filePath) + '</pre></div>' +
           '<div class="hits">' + hitsHtml + '</div>' +
         '</article>';
       }).join("");
     }
 
-    function scrollToIssuesTop() {
-      issuesRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+    function scrollToPageTop() {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     function goToPage(page) {
@@ -727,7 +733,7 @@ function renderProjectResultHtml(result: ProjectResult): string {
       }
       currentPage = nextPage;
       renderIssues();
-      scrollToIssuesTop();
+      scrollToPageTop();
     }
 
     document.getElementById("select-all").addEventListener("click", () => {

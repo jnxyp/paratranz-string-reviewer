@@ -5,8 +5,8 @@
     "reasoningEffort": "low"
   },
   "review": {
-    "rulesVersion": "v6",
-    "allowedStages": [1],
+    "rulesVersion": "v7",
+    "allowedStages": [1, 5],
     "batchSize": 100,
     "batchMaxChars": 25000,
     "batchMaxRetries": 2,
@@ -36,8 +36,8 @@
     },
     {
       "id": "R2",
-      "criteria": "译文存在明显叠字或重复片段",
-      "report": "命中时需要详细完整说明重复了什么内容，以及为什么可以判断为误重复"
+      "criteria": "译文存在明显叠字或重复片段；但如果原文是 `$hisOrHer`，译文在对应翻译后加“的”，或如果原文是 `$himOrHerself`，译文在对应翻译后加“自己”，不算此规则问题。",
+      "report": "命中时需要详细完整说明重复了什么内容，以及为什么可以判断为误重复；不要把 `$hisOrHer` 后补“的”或 `$himOrHerself` 后补“自己”当作重复问题"
     },
     {
       "id": "R3",
